@@ -30,12 +30,20 @@ export function Sidebar({ currentCity, activeTags = [], setActiveTags, filterMod
             className="w-full bg-neutral-900 border border-neutral-700 text-xs p-2 uppercase outline-none focus:border-yellow-500 transition-colors" 
             value={currentCity} 
             onChange={(e) => { 
-              // --- COOKIE PERSISTENCE ---
-              document.cookie = `last-city=${e.target.value}; path=/; max-age=31536000; SameSite=Lax`;
-              
-              router.push(`/?city=${e.target.value}`); 
-              if (onClose) onClose(); 
-            }}
+  const selectedCity = e.target.value;
+  console.log("Setting city to:", selectedCity); // Debug log
+
+  try {
+    // We add 'SameSite=Lax' and a 'path' to ensure the browser accepts it
+    document.cookie = `last-city=${selectedCity}; path=/; max-age=31536000; SameSite=Lax`;
+    console.log("Cookie set successfully:", document.cookie);
+  } catch (err) {
+    console.error("Cookie failed to set:", err);
+  }
+
+  router.push(`/?city=${selectedCity}`); 
+  if (onClose) onClose(); 
+}}
           >
             <option value="" disabled>-- CHOOSE A CITY --</option>
             {cities.map(c => <option key={c.slug} value={c.slug}>{c.name}</option>)}
