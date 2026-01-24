@@ -25,10 +25,22 @@ export function Sidebar({ currentCity, activeTags = [], setActiveTags, filterMod
         <button onClick={onClose} className="md:hidden self-end text-neutral-500 text-[10px] mb-2 uppercase tracking-widest">Close [X]</button>
         <div className="space-y-4">
           <h1 className="text-xl font-bold text-yellow-500 tracking-tighter leading-none">B LoCAL</h1>
-          <select className="w-full bg-neutral-900 border border-neutral-700 text-xs p-2 uppercase outline-none focus:border-yellow-500 transition-colors" value={currentCity} onChange={(e) => { router.push(`/?city=${e.target.value}`); if (onClose) onClose(); }}>
+          
+          <select 
+            className="w-full bg-neutral-900 border border-neutral-700 text-xs p-2 uppercase outline-none focus:border-yellow-500 transition-colors" 
+            value={currentCity} 
+            onChange={(e) => { 
+              // --- COOKIE PERSISTENCE ---
+              document.cookie = `last-city=${e.target.value}; path=/; max-age=31536000; SameSite=Lax`;
+              
+              router.push(`/?city=${e.target.value}`); 
+              if (onClose) onClose(); 
+            }}
+          >
             <option value="" disabled>-- CHOOSE A CITY --</option>
             {cities.map(c => <option key={c.slug} value={c.slug}>{c.name}</option>)}
           </select>
+          
           <button onClick={onAddEvent} className="w-full py-3 font-bold text-xs uppercase bg-yellow-600 text-black hover:bg-yellow-500 transition-all">+ Post Event</button>
         </div>
 
@@ -63,7 +75,6 @@ export function Sidebar({ currentCity, activeTags = [], setActiveTags, filterMod
             onKeyDown={(e) => { 
               if(e.key === 'Enter') { 
                 const val = e.currentTarget.value.trim().toLowerCase();
-                // --- BANNED CHECK ---
                 if (BANNED_WORDS_SET.has(val)) {
                   e.currentTarget.value = "";
                   return alert("Offensive filters are prohibited.");
