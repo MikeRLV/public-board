@@ -48,7 +48,6 @@ export function CalendarLogic({ city }: { city: string }) {
 
   const todayStr = useMemo(() => dayjs().format('YYYY-MM-DD'), []);
   
-  // Wikipedia-style normalization for URLs
   const slugify = (text: string) => 
     text.toLowerCase().trim().replace(/[\s_]+/g, "-").replace(/[^\w-]+/g, "").replace(/--+/g, "-").replace(/^-+|-+$/g, "");
 
@@ -58,7 +57,6 @@ export function CalendarLogic({ city }: { city: string }) {
     setUserId(storedId);
   }, []);
 
-  // Fetch Trending Tags
   useEffect(() => {
     const fetchWeightedTags = async () => {
       const { data, error } = await supabase.from('flyer_tags').select('vote_count, tags(name)').limit(500);
@@ -77,15 +75,36 @@ export function CalendarLogic({ city }: { city: string }) {
     fetchWeightedTags();
   }, [events]);
 
+  // --- UPDATED SQL FETCH WITH "OR" LOGIC ---
   const fetchEvents = async () => {
-    if (!city) return; 
     const start = currentDate.startOf('month').toISOString();
     const end = currentDate.endOf('month').toISOString();
-    const { data } = await supabase.from('flyers').select('*, flyer_tags(vote_count, tags(name))').eq('city_slug', city).gte('event_start', start).lte('event_start', end);
-    if (data) setEvents(data);
+    
+    let query = supabase
+      .from('flyers')
+      .select('*, flyer_tags(vote_count, tags(name))')
+      .gte('event_start', start)
+      .lte('event_start', end);
+
+    const citySlug = city ? slugify(city) : null;
+
+    // We build an "OR" filter to catch both the project city and dynamic town tags
+    if (activeTowns.length > 0 || citySlug) {
+      const townFilters = activeTowns.map(t => `town_name.eq.${t}`);
+      const cityFilter = citySlug ? `city_slug.eq.${citySlug}` : '';
+      
+      const orFilter = [...townFilters, cityFilter].filter(Boolean).join(',');
+      query = query.or(orFilter);
+    } else {
+      setEvents([]); // Nothing selected, show empty
+      return;
+    }
+
+    const { data, error } = await query;
+    if (!error && data) setEvents(data);
   };
 
-  useEffect(() => { fetchEvents(); }, [currentDate, city]);
+  useEffect(() => { fetchEvents(); }, [currentDate, city, activeTowns]);
 
   const handleClosePostModal = () => {
     setFormState({ title: "", town: "", place: "", price: "", desc: "", date: "", tags: "", image: null });
@@ -96,33 +115,24 @@ export function CalendarLogic({ city }: { city: string }) {
     if (isUploading || !formState.image || !formState.town) return;
 
     const townSlug = slugify(formState.town);
-    
-    // Naughty check
-    if (BANNED_WORDS_SET.has(townSlug)) {
-        return alert("This location name is prohibited.");
-    }
+    if (BANNED_WORDS_SET.has(townSlug)) return alert("Prohibited location name.");
 
     const tags = formState.tags.split(',').map(t => slugify(t)).filter(t => t !== "");
-    if (tags.some(tag => BANNED_WORDS_SET.has(tag))) {
-      return alert("One or more tags contains prohibited language.");
-    }
+    if (tags.some(tag => BANNED_WORDS_SET.has(tag))) return alert("One or more tags prohibited.");
 
     setIsUploading(true);
     try {
       const fileExt = formState.image.name.split('.').pop();
-      // Use the pre-filled or entered town as the storage folder
       const fileName = `${townSlug}/${Math.random().toString(36).slice(2)}.${fileExt}`;
       const { error: uploadError } = await supabase.storage.from('flyers').upload(fileName, formState.image);
       if (uploadError) throw uploadError;
 
       const { data: urlData } = supabase.storage.from('flyers').getPublicUrl(fileName);
       
-      // TIE-IN LOGIC: If we have a current city project, tie this town tag to it. 
-      // Otherwise, the town becomes its own new city project.
       const targetCity = city || townSlug;
 
       const { data: insertedData, error: insertError } = await supabase.from('flyers').insert({
-        city_slug: targetCity, 
+        city_slug: slugify(targetCity), 
         town_name: townSlug, 
         title: formState.title, 
         location_name: formState.place, 
@@ -134,19 +144,12 @@ export function CalendarLogic({ city }: { city: string }) {
 
       if (!insertError && insertedData?.[0]) {
         for (const t of tags) await supabase.rpc('vote_on_tag', { target_flyer_id: insertedData[0].id, target_tag_name: t, vote_val: 1, voter_id: userId });
-        
         handleClosePostModal();
 
-        // --- DYNAMIC REDIRECT ---
-        // If we were on the landing page, redirect to the new town's calendar
         if (!city) {
           router.push(`/?city=${townSlug}`);
         } else {
-          // If we were already in a city, just refresh the current view
-          // and ensure the new town is added to our active tracker bucket
-          if (!activeTowns.includes(townSlug)) {
-            setActiveTowns([...activeTowns, townSlug]);
-          }
+          if (!activeTowns.includes(townSlug)) setActiveTowns([...activeTowns, townSlug]);
           fetchEvents();
         }
       }
@@ -155,12 +158,16 @@ export function CalendarLogic({ city }: { city: string }) {
 
   const filteredEvents = useMemo(() => {
     return events.filter(e => {
+      // Secondary UI-side check for active bucket
       if (activeTowns.length > 0 && !activeTowns.includes(e.town_name)) return false;
+
       const totalVotes = e.flyer_tags.reduce((acc: number, ft: any) => acc + Math.max(0, ft.vote_count || 0), 0);
       const isSpam = totalVotes > 0 && ((e.flyer_tags.find((ft: any) => slugify(ft.tags.name) === 'spam')?.vote_count || 0) / totalVotes >= 0.25);
+      
       if (isSpam && !showSpam) return false;
       if (showAllEvents) return true;
       if (activeTags.length === 0) return true;
+      
       const eventTags = e.flyer_tags.map((ft: any) => slugify(ft.tags.name));
       return filterMode === 'OR' 
         ? activeTags.some(tag => eventTags.includes(slugify(tag))) 
@@ -180,8 +187,6 @@ export function CalendarLogic({ city }: { city: string }) {
         showAllEvents={showAllEvents} setShowAllEvents={setShowAllEvents} 
         showSpam={showSpam} setShowSpam={setShowSpam} 
         onAddEvent={() => { 
-          // --- CONTEXT PRE-FILL ---
-          // Pre-fills the town with the current city if it exists
           setFormState({...formState, date: todayStr, town: city || ""}); 
           setIsPostModalOpen(true); 
         }}
@@ -190,20 +195,19 @@ export function CalendarLogic({ city }: { city: string }) {
       />
       
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        <CalendarHeader currentDate={currentDate} setCurrentDate={setCurrentDate} city={city} onMenuClick={() => setIsSidebarOpen(true)} />
+        <CalendarHeader currentDate={currentDate} setCurrentDate={setCurrentDate} city={city || activeTowns[0]} onMenuClick={() => setIsSidebarOpen(true)} />
         
         {activeTowns.length === 0 && !city ? (
           <div className="flex-1 flex flex-col items-center justify-center p-10 text-center bg-neutral-900/20">
             <div className="max-w-md space-y-6">
-              <h2 className="text-4xl font-black text-yellow-500 uppercase tracking-tighter leading-none">No City Selected</h2>
-              <p className="text-neutral-500 text-xs uppercase tracking-[0.2em] font-bold">Please select a town in the sidebar or post an event to begin tracking.</p>
+              <h2 className="text-4xl font-black text-yellow-500 uppercase tracking-tighter leading-none">No Selection Selected</h2>
               <div className="pt-4 animate-pulse">
-                <span className="text-[10px] text-yellow-600 font-black border border-yellow-600/30 px-4 py-2 rounded-full uppercase tracking-widest">&larr; Choose a town to start</span>
+                <span className="text-[10px] text-yellow-600 font-black border border-yellow-600/30 px-4 py-2 rounded-full uppercase tracking-widest">&larr; Add a town to view a Calendar</span>
               </div>
             </div>
           </div>
         ) : (
-          <CalendarGrid currentDate={currentDate} todayStr={todayStr} activeDay={activeDay} setActiveDay={setActiveDay} filteredEvents={filteredEvents} city={city} />
+          <CalendarGrid currentDate={currentDate} todayStr={todayStr} activeDay={activeDay} setActiveDay={setActiveDay} filteredEvents={filteredEvents} city={city || activeTowns[0]} />
         )}
 
         {activeDay && (

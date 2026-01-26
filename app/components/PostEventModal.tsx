@@ -1,11 +1,38 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export function PostEventModal({ isOpen, onClose, formState, setFormState, onSave, isUploading, todayStr, bannedWords = [] }: any) {
   
-  // Normalizes "New York" to "new-york" for the database and redirect
   const slugify = (text: string) => 
     text.toLowerCase().trim().replace(/[\s_]+/g, "-").replace(/[^\w-]+/g, "").replace(/--+/g, "-").replace(/^-+|-+$/g, "");
+
+  // --- Bi-directional Auto-Tag Logic ---
+  useEffect(() => {
+    const p = formState.price.toLowerCase().trim();
+    const isFreePrice = (p === "0" || p === "$0" || p === "free");
+    
+    // Explicitly typing 't' as string to resolve TS7006 errors
+    const tagsArray = formState.tags.split(',').map((t: string) => t.trim());
+    const hasFreeTag = tagsArray.some((t: string) => t.toLowerCase() === "free");
+
+    if (isFreePrice && !hasFreeTag) {
+      // ADD: Price is free but tag is missing
+      const updatedTags = formState.tags.trim() 
+        ? (formState.tags.trim().endsWith(',') ? `${formState.tags} free, ` : `${formState.tags}, free, `)
+        : "free, ";
+      setFormState({ ...formState, tags: updatedTags });
+
+    } else if (!isFreePrice && hasFreeTag) {
+      // REMOVE: Price is paid but "free" tag exists
+      const filteredTags = tagsArray
+        .filter((t: string) => t.toLowerCase() !== "free") // Fix for Ln 28
+        .filter((t: string) => t !== "")                 // Fix for Ln 29
+        .join(', ');
+      
+      const finalTags = filteredTags ? `${filteredTags}, ` : "";
+      setFormState({ ...formState, tags: finalTags });
+    }
+  }, [formState.price]); 
 
   if (!isOpen) return null;
 
@@ -16,15 +43,13 @@ export function PostEventModal({ isOpen, onClose, formState, setFormState, onSav
         
         <div className="space-y-4">
           <input type="date" min={todayStr} className="w-full bg-black border border-neutral-700 p-3 text-white text-xs outline-none focus:border-yellow-500 font-mono" value={formState.date} onChange={e => setFormState({ ...formState, date: e.target.value })} />
-          
           <input className="w-full bg-black border border-neutral-700 p-3 text-white text-xs outline-none focus:border-yellow-500 uppercase font-black" placeholder="EVENT TITLE" value={formState.title} onChange={e => setFormState({ ...formState, title: e.target.value })} />
 
-          {/* REQUIRED TOWN/CITY FIELD */}
           <div className="flex flex-col gap-1">
              <input 
                required
-               className="w-full bg-black border border-neutral-700 p-3 text-white text-xs outline-none focus:border-yellow-500 font-mono lowercase" 
-               placeholder="TOWN / CITY (e.g. Summerlin or New York)" 
+               className="w-full bg-black border border-neutral-700 p-3 text-white text-xs outline-none focus:border-yellow-500 font-mono" 
+               placeholder="LOCATION" 
                value={formState.town} 
                onChange={e => {
                  const val = e.target.value;
@@ -34,13 +59,12 @@ export function PostEventModal({ isOpen, onClose, formState, setFormState, onSav
                onBlur={() => setFormState({ ...formState, town: slugify(formState.town) })}
              />
              <span className="text-[7px] text-neutral-600 uppercase tracking-widest ml-1 font-bold">
-                {formState.town ? `Projecting to: ${slugify(formState.town)}` : "Required: Choose a location to project this event"}
+                {formState.town ? `Posting to: ${slugify(formState.town)}` : "Required: Choose a location"}
              </span>
           </div>
 
           <input className="w-full bg-black border border-neutral-700 p-3 text-white text-xs outline-none focus:border-yellow-500 font-mono" placeholder="VENUE NAME" value={formState.place} onChange={e => setFormState({ ...formState, place: e.target.value })} />
-          
-          <input className="w-full bg-black border border-neutral-700 p-3 text-white text-xs outline-none focus:border-yellow-500 font-mono" placeholder="PRICE (e.g. $10 or FREE)" value={formState.price} onChange={e => setFormState({ ...formState, price: e.target.value })} />
+          <input className="w-full bg-black border border-neutral-700 p-3 text-white text-xs outline-none focus:border-yellow-500 font-mono" placeholder="PRICE" value={formState.price} onChange={e => setFormState({ ...formState, price: e.target.value })} />
           
           <div className="relative">
             <input 
@@ -70,7 +94,7 @@ export function PostEventModal({ isOpen, onClose, formState, setFormState, onSav
             disabled={isUploading || !formState.town} 
             className="flex-1 py-3 text-xs font-bold uppercase transition-all bg-yellow-600 text-black hover:bg-yellow-500 disabled:opacity-50"
           >
-            {isUploading ? "UPLOADING..." : "Project Flyer"}
+            {isUploading ? "UPLOADING..." : "Post Flyer"}
           </button>
         </div>
       </div>
