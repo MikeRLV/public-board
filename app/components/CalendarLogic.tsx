@@ -50,7 +50,7 @@ export function CalendarLogic({ city }: { city: string }) {
   // --- Form State Update with Booleans to prevent Uncontrolled Errors ---
   const [formState, setFormState] = useState({
     title: "", town: "", place: "", price: "", desc: "", date: "", tags: "", image: null as File | null,
-    isAllAges: false, is18Plus: false, is21Plus: false // Defaults added
+    isAllAges: false, is18Plus: false, is21Plus: false 
   });
 
   const todayStr = useMemo(() => dayjs().format('YYYY-MM-DD'), []);
@@ -141,7 +141,6 @@ export function CalendarLogic({ city }: { city: string }) {
     const townSlug = slugify(formState.town);
     if (BANNED_WORDS_SET.has(townSlug)) return alert("Prohibited location name.");
 
-    // Tags are already synced in PostEventModal, but we clean them here for insertion
     const tags = formState.tags.split(',').map((t: string) => slugify(t)).filter((t: string) => t !== "");
     if (tags.some((tag: string) => BANNED_WORDS_SET.has(tag))) return alert("One or more tags prohibited.");
 
@@ -180,14 +179,12 @@ export function CalendarLogic({ city }: { city: string }) {
     } finally { setIsUploading(false); }
   };
 
-  // --- UPDATED: Filtering Logic for Age Restrictions ---
   const filteredEvents = useMemo(() => {
     return events.filter((e: any) => {
       if (activeTowns.length > 0 && !activeTowns.includes(e.town_name)) return false;
       
       const eventTags = e.flyer_tags.map((ft: any) => slugify(ft.tags.name));
 
-      // Age Toggle Logic
       if (showAllAges && !eventTags.includes("all-ages")) return false;
       if (show18 && !eventTags.includes("18+")) return false;
       if (show21 && !eventTags.includes("21+")) return false;
@@ -217,7 +214,6 @@ export function CalendarLogic({ city }: { city: string }) {
         onTrendingClick={() => setIsTrendingModalOpen(true)} 
         showAllEvents={showAllEvents} setShowAllEvents={setShowAllEvents} 
         showSpam={showSpam} setShowSpam={setShowSpam} 
-        // Passing Age Toggles to Sidebar
         showAllAges={showAllAges} setShowAllAges={setShowAllAges}
         show18={show18} setShow18={setShow18}
         show21={show21} setShow21={setShow21}
@@ -258,7 +254,16 @@ export function CalendarLogic({ city }: { city: string }) {
             onClose={() => setActiveDay(null)} 
             onVote={fetchEvents} 
             onPostClick={(d: string) => { 
-               setFormState({...formState, date: d, town: city || activeTowns[0] || ""}); 
+               // SEQUENTIAL FIX: Close the active day view before opening the post modal
+               setActiveDay(null); 
+               setFormState({
+                 ...formState, 
+                 date: d, 
+                 town: city || activeTowns[0] || "",
+                 isAllAges: false,
+                 is18Plus: false,
+                 is21Plus: false
+               }); 
                setIsPostModalOpen(true); 
             }} 
           />

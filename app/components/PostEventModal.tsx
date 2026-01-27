@@ -35,10 +35,9 @@ export function PostEventModal({ isOpen, onClose, formState, setFormState, onSav
     };
 
     // 2. Handle Age Restriction Tags
-    // Use !! to ensure boolean values and prevent uncontrolled input errors
     syncTag(!!formState.is18Plus, "18+");
     syncTag(!!formState.is21Plus, "21+");
-    syncTag(!!formState.isAllAges, "all-ages"); // Updated to slugified format
+    syncTag(!!formState.isAllAges, "all-ages"); 
 
     if (changed) {
       setFormState({ 
@@ -46,14 +45,14 @@ export function PostEventModal({ isOpen, onClose, formState, setFormState, onSav
         tags: currentTags.join(', ') + (currentTags.length > 0 ? ', ' : '') 
       });
     }
-    // FIX: Constant dependency array size to solve React Hook error
   }, [formState.price, !!formState.is18Plus, !!formState.is21Plus, !!formState.isAllAges]); 
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-4 overflow-y-auto" onClick={onClose}>
-      <div className="bg-neutral-900 w-full max-w-lg border border-yellow-600/50 rounded-xl p-8 flex flex-col my-auto relative" onClick={e => e.stopPropagation()}>
+    // UPDATED Z-INDEX: Changed from 100 to 130 to stay above DayDetailsModal
+    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/95 p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-neutral-900 w-full max-w-lg border border-yellow-600/50 rounded-xl p-8 flex flex-col my-auto relative shadow-[0_0_50px_rgba(0,0,0,0.8)]" onClick={e => e.stopPropagation()}>
         <h2 className="text-2xl font-bold text-yellow-500 mb-6 uppercase tracking-tighter leading-none">Post Event</h2>
         
         <div className="space-y-4">
@@ -64,7 +63,6 @@ export function PostEventModal({ isOpen, onClose, formState, setFormState, onSav
           <input className="w-full bg-black border border-neutral-700 p-3 text-white text-xs outline-none focus:border-yellow-500 font-mono" placeholder="VENUE NAME" value={formState.place} onChange={e => setFormState({ ...formState, place: e.target.value })} />
           <input className="w-full bg-black border border-neutral-700 p-3 text-white text-xs outline-none focus:border-yellow-500 font-mono" placeholder="PRICE" value={formState.price} onChange={e => setFormState({ ...formState, price: e.target.value })} />
           
-          {/* Age Restriction Toggles with Preserved Functional Styles */}
           <div className="flex flex-wrap gap-4 py-2 px-1">
             {/* All Ages (Emerald Green) */}
             <label className="flex items-center gap-2 cursor-pointer group">
