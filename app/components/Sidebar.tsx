@@ -14,6 +14,7 @@ export function Sidebar({
   setFilterMode, 
   trendingTags = [], 
   onTrendingClick, 
+  onBucketClick, 
   showAllEvents, 
   setShowAllEvents, 
   showSpam, 
@@ -22,8 +23,8 @@ export function Sidebar({
   setShow18,     
   show21,       
   setShow21,
-  showAllAges,    // NEW: All Ages Filter State
-  setShowAllAges, // NEW: All Ages Filter Setter
+  showAllAges,    
+  setShowAllAges, 
   onAddEvent, 
   isOpen, 
   onClose 
@@ -45,6 +46,9 @@ export function Sidebar({
     setTownInput("");
   };
 
+  // Check if any location context exists to unlock discovery
+  const hasLocation = activeTowns.length > 0 || currentCity;
+
   return (
     <>
       {isOpen && <div className="fixed inset-0 bg-black/60 z-[70] md:hidden" onClick={onClose} />}
@@ -61,36 +65,22 @@ export function Sidebar({
             Post Event
           </button>
 
-          {/* 1. SAVED LIST */}
-          <div className="flex flex-col gap-1 pt-2">
-            <div className="text-[10px] font-bold text-neutral-600 uppercase tracking-[0.2em] ml-1 mb-1">Saved</div>
-            <div className="flex flex-col border-y border-white/[0.05] py-1 max-h-48 overflow-y-auto custom-scrollbar">
-              {savedLocations.length > 0 ? (
-                savedLocations
-                  .filter((loc: string) => !activeTowns.includes(loc))
-                  .map((loc: string) => (
-                    <button
-                      key={loc}
-                      onClick={() => handleAddTown(loc)}
-                      className="group flex justify-between items-center py-2 px-2 hover:bg-white/[0.03] border-b border-white/[0.02] last:border-0 transition-colors"
-                    >
-                      <span className="text-[10px] font-bold text-neutral-400 group-hover:text-yellow-500/80 uppercase transition-colors">
-                        {loc.replace(/-/g, ' ')}
-                      </span>
-                      <span className="text-[10px] text-neutral-700 font-black group-hover:text-yellow-500">+</span>
-                    </button>
-                  ))
-              ) : (
-                <span className="text-[9px] text-neutral-800 uppercase italic p-2 tracking-widest text-center">Discovering areas...</span>
-              )}
-            </div>
+          {/* 1. LOCATIONS POP-OUT BUTTON (Removed Flashing and renamed from Bucket) */}
+          <div className="flex flex-col gap-3 pt-2">
+            <button onClick={onBucketClick} className="group flex items-center gap-2 text-left w-full p-1">
+              <div className="flex items-center">
+                <span className="w-1.5 h-1.5 bg-yellow-600 rounded-full inline-block mr-2 shadow-[0_0_5px_rgba(202,138,4,0.3)]" /> 
+                <span className="font-bold text-yellow-500/50 text-[10px] uppercase tracking-[0.3em] group-hover:text-yellow-500 transition-colors">Locations</span>
+              </div>
+            </button>
           </div>
 
-          {/* 2. LOCATION INPUT & ACTIVE CHIPS */}
+          {/* 2. ACTIVE SELECTIONS & MANUAL INPUT */}
           <div className="space-y-3 pt-2">
+            <div className="text-[9px] font-bold text-neutral-600 uppercase tracking-widest ml-1">Current Filter</div>
             <input 
               className="w-full bg-neutral-900 border border-neutral-700 text-xs p-2 outline-none focus:border-yellow-500 transition-colors uppercase font-bold" 
-              placeholder="Location(s)" 
+              placeholder="+ Add Custom Town" 
               value={townInput}
               onChange={e => setTownInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleAddTown(townInput)}
@@ -101,21 +91,19 @@ export function Sidebar({
                 <span 
                   key={t} 
                   onClick={() => setActiveTowns(activeTowns.filter((item: string) => item !== t))} 
-                  className="bg-yellow-900/40 border border-yellow-600/50 px-2 py-0.5 text-[8px] font-bold cursor-pointer hover:bg-red-900/40 hover:border-red-500 transition-all uppercase"
+                  className="bg-yellow-900/40 border border-yellow-600/50 px-2 py-0.5 text-[8px] font-bold cursor-pointer hover:bg-red-900/40 hover:border-red-500 transition-all uppercase shadow-sm"
                 >
                   {t.replace(/-/g, ' ')} ×
                 </span>
               ))}
             </div>
           </div>
-
-          <div className="h-8" />
         </div>
 
-        {/* TRENDING SECTION */}
-        <div className="flex flex-col gap-3 border-t border-white/5 pt-4">
-          <button onClick={onTrendingClick} className="group flex items-center gap-2 text-left w-full">
-            <div className="flex items-center animate-pulse">
+        {/* 3. TRENDING SECTION: Dimmed until location is set */}
+        <div className={`flex flex-col gap-3 border-t border-white/5 pt-4 transition-opacity ${!hasLocation ? 'opacity-20 pointer-events-none' : ''}`}>
+          <button onClick={onTrendingClick} className="group flex items-center gap-2 text-left w-full p-1">
+            <div className="flex items-center">
               <span className="w-1.5 h-1.5 bg-red-600 rounded-full inline-block mr-2" /> 
               <span className="font-bold text-yellow-500/50 text-[10px] uppercase tracking-[0.3em] group-hover:text-yellow-500 transition-colors">Trending</span>
             </div>
@@ -130,8 +118,8 @@ export function Sidebar({
           </div>
         </div>
 
-        {/* FILTERS SECTION */}
-        <div className="flex flex-col gap-4 border-t border-white/5 pt-4">
+        {/* 4. FILTERS SECTION: Disabled until location is set */}
+        <div className={`flex flex-col gap-4 border-t border-white/5 pt-4 transition-opacity ${!hasLocation ? 'opacity-20 pointer-events-none' : ''}`}>
           <div className="flex justify-between items-center text-[10px]">
             <div className="font-bold text-neutral-500 uppercase tracking-widest">Filters</div>
             <div className="flex border border-neutral-800 rounded overflow-hidden">
@@ -163,11 +151,9 @@ export function Sidebar({
           </div>
         </div>
 
-        {/* BOTTOM TOGGLES */}
+        {/* 5. BOTTOM TOGGLES: Constrained by location context */}
         <div className="flex flex-col gap-3 border-t border-white/5 pt-4 mt-auto">
-           {/* REINSTATED AGE RESTRICTION TOGGLES */}
-           <div className="flex gap-4 px-1 pb-1">
-              {/* All Ages Toggle (Emerald Green) */}
+           <div className={`flex gap-4 px-1 pb-1 transition-opacity ${!hasLocation ? 'opacity-20 pointer-events-none' : ''}`}>
               <button className="flex items-center gap-2 group" onClick={() => setShowAllAges(!showAllAges)}>
                  <div className={`w-3 h-3 border transition-all ${showAllAges ? 'bg-emerald-600 border-emerald-600 shadow-sm' : 'border-neutral-700'}`} />
                  <span className={`text-[9px] font-bold uppercase transition-colors ${showAllAges ? 'text-emerald-500' : 'text-neutral-500 group-hover:text-neutral-300'}`}>All Ages</span>
@@ -175,19 +161,24 @@ export function Sidebar({
               
               <button className="flex items-center gap-2 group" onClick={() => setShow18(!show18)}>
                  <div className={`w-3 h-3 border transition-all ${show18 ? 'bg-yellow-600 border-yellow-600 shadow-sm' : 'border-neutral-700'}`} />
-                 <span className={`text-[9px] font-bold uppercase transition-colors ${show18 ? 'text-yellow-500' : 'text-neutral-500 group-hover:text-neutral-300'}`}>+18</span>
+                 <span className={`text-[9px] font-bold uppercase transition-colors ${show18 ? 'text-yellow-500' : 'text-neutral-500 group-hover:text-neutral-300'}`}>18+</span>
               </button>
               
               <button className="flex items-center gap-2 group" onClick={() => setShow21(!show21)}>
                  <div className={`w-3 h-3 border transition-all ${show21 ? 'bg-red-600 border-red-600 shadow-sm' : 'border-neutral-700'}`} />
-                 <span className={`text-[9px] font-bold uppercase transition-colors ${show21 ? 'text-red-500' : 'text-neutral-500 group-hover:text-neutral-300'}`}>+21</span>
+                 <span className={`text-[9px] font-bold uppercase transition-colors ${show21 ? 'text-red-500' : 'text-neutral-500 group-hover:text-neutral-300'}`}>21+</span>
               </button>
            </div>
 
-           <button className="flex items-center gap-3 group w-full text-left" onClick={() => setShowAllEvents(!showAllEvents)}>
-              <div className={`w-4 h-4 border transition-all rounded-sm ${showAllEvents ? 'bg-emerald-600 border-emerald-600 shadow-lg' : 'border-neutral-700'}`} />
-              <span className="text-[10px] font-bold text-neutral-500 uppercase group-hover:text-neutral-300 transition-colors">Show All</span>
+           <button 
+             className={`flex items-center gap-3 group w-full text-left ${!hasLocation ? 'opacity-30 cursor-not-allowed' : ''}`} 
+             onClick={() => hasLocation && setShowAllEvents(!showAllEvents)}
+             disabled={!hasLocation}
+           >
+              <div className={`w-4 h-4 border transition-all rounded-sm ${showAllEvents && hasLocation ? 'bg-emerald-600 border-emerald-600 shadow-lg' : 'border-neutral-700'}`} />
+              <span className="text-[10px] font-bold text-neutral-500 uppercase group-hover:text-neutral-300 transition-colors">Show All local</span>
            </button>
+           
            <button className="flex items-center gap-3 group w-full text-left" onClick={() => setShowSpam(!showSpam)}>
               <div className={`w-4 h-4 border transition-all rounded-sm ${showSpam ? 'bg-red-600 border-red-600 shadow-lg' : 'border-neutral-700'}`} />
               <span className="text-[10px] font-bold text-neutral-500 uppercase group-hover:text-neutral-300 transition-colors">Show Spam</span>
