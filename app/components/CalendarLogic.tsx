@@ -200,7 +200,7 @@ export function CalendarLogic({ city }: { city: string }) {
         {activeTowns.length === 0 && !city ? (
           <div className="flex-1 flex flex-col items-center justify-center p-10 text-center bg-neutral-900/20">
             <div className="max-w-md space-y-6">
-              <h2 className="text-4xl font-black text-yellow-500 uppercase tracking-tighter leading-none">No Selection Selected</h2>
+              <h2 className="text-4xl font-black text-yellow-500 uppercase tracking-tighter leading-none">No Location Selected</h2>
               <div className="pt-4 animate-pulse">
                 <span className="text-[10px] text-yellow-600 font-black border border-yellow-600/30 px-4 py-2 rounded-full uppercase tracking-widest">&larr; Add a town to view a Calendar</span>
               </div>
