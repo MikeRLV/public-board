@@ -17,7 +17,13 @@ export function Sidebar({
   showAllEvents, 
   setShowAllEvents, 
   showSpam, 
-  setShowSpam, 
+  setShowSpam,
+  show18,       
+  setShow18,     
+  show21,       
+  setShow21,
+  showAllAges,    // NEW: All Ages Filter State
+  setShowAllAges, // NEW: All Ages Filter Setter
   onAddEvent, 
   isOpen, 
   onClose 
@@ -48,7 +54,6 @@ export function Sidebar({
         <div className="space-y-4">
           <h1 className="text-xl font-bold text-yellow-500 tracking-tighter leading-none whitespace-nowrap uppercase">B LoCAL</h1>
           
-          {/* Post Event Button at the top */}
           <button 
             onClick={onAddEvent} 
             className="w-full py-3 mt-2 font-bold text-xs uppercase bg-yellow-600 text-black hover:bg-yellow-500 transition-all shadow-lg active:scale-95"
@@ -104,11 +109,10 @@ export function Sidebar({
             </div>
           </div>
 
-          {/* 3. BUFFER: Now situated under the location logic */}
           <div className="h-8" />
         </div>
 
-        {/* TRENDING SECTION - Preserved */}
+        {/* TRENDING SECTION */}
         <div className="flex flex-col gap-3 border-t border-white/5 pt-4">
           <button onClick={onTrendingClick} className="group flex items-center gap-2 text-left w-full">
             <div className="flex items-center animate-pulse">
@@ -126,7 +130,7 @@ export function Sidebar({
           </div>
         </div>
 
-        {/* FILTERS SECTION - Preserved */}
+        {/* FILTERS SECTION */}
         <div className="flex flex-col gap-4 border-t border-white/5 pt-4">
           <div className="flex justify-between items-center text-[10px]">
             <div className="font-bold text-neutral-500 uppercase tracking-widest">Filters</div>
@@ -161,6 +165,25 @@ export function Sidebar({
 
         {/* BOTTOM TOGGLES */}
         <div className="flex flex-col gap-3 border-t border-white/5 pt-4 mt-auto">
+           {/* REINSTATED AGE RESTRICTION TOGGLES */}
+           <div className="flex gap-4 px-1 pb-1">
+              {/* All Ages Toggle (Emerald Green) */}
+              <button className="flex items-center gap-2 group" onClick={() => setShowAllAges(!showAllAges)}>
+                 <div className={`w-3 h-3 border transition-all ${showAllAges ? 'bg-emerald-600 border-emerald-600 shadow-sm' : 'border-neutral-700'}`} />
+                 <span className={`text-[9px] font-bold uppercase transition-colors ${showAllAges ? 'text-emerald-500' : 'text-neutral-500 group-hover:text-neutral-300'}`}>All Ages</span>
+              </button>
+              
+              <button className="flex items-center gap-2 group" onClick={() => setShow18(!show18)}>
+                 <div className={`w-3 h-3 border transition-all ${show18 ? 'bg-yellow-600 border-yellow-600 shadow-sm' : 'border-neutral-700'}`} />
+                 <span className={`text-[9px] font-bold uppercase transition-colors ${show18 ? 'text-yellow-500' : 'text-neutral-500 group-hover:text-neutral-300'}`}>+18</span>
+              </button>
+              
+              <button className="flex items-center gap-2 group" onClick={() => setShow21(!show21)}>
+                 <div className={`w-3 h-3 border transition-all ${show21 ? 'bg-red-600 border-red-600 shadow-sm' : 'border-neutral-700'}`} />
+                 <span className={`text-[9px] font-bold uppercase transition-colors ${show21 ? 'text-red-500' : 'text-neutral-500 group-hover:text-neutral-300'}`}>+21</span>
+              </button>
+           </div>
+
            <button className="flex items-center gap-3 group w-full text-left" onClick={() => setShowAllEvents(!showAllEvents)}>
               <div className={`w-4 h-4 border transition-all rounded-sm ${showAllEvents ? 'bg-emerald-600 border-emerald-600 shadow-lg' : 'border-neutral-700'}`} />
               <span className="text-[10px] font-bold text-neutral-500 uppercase group-hover:text-neutral-300 transition-colors">Show All</span>

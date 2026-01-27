@@ -37,14 +37,20 @@ export function CalendarLogic({ city }: { city: string }) {
   const [weightedTags, setWeightedTags] = useState<{name: string, weight: number}[]>([]);
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [activeTowns, setActiveTowns] = useState<string[]>([]); 
-  const [savedLocations, setSavedLocations] = useState<string[]>([]); // New state for dynamic town pool
+  const [savedLocations, setSavedLocations] = useState<string[]>([]); 
   const [filterMode, setFilterMode] = useState<'OR' | 'AND'>('OR'); 
   const [showAllEvents, setShowAllEvents] = useState(false); 
   const [showSpam, setShowSpam] = useState(false); 
 
-  // --- Form State ---
+  // --- REINSTATED: Age Restriction Filter States ---
+  const [showAllAges, setShowAllAges] = useState(false);
+  const [show18, setShow18] = useState(false);
+  const [show21, setShow21] = useState(false);
+
+  // --- Form State Update with Booleans to prevent Uncontrolled Errors ---
   const [formState, setFormState] = useState({
-    title: "", town: "", place: "", price: "", desc: "", date: "", tags: "", image: null as File | null
+    title: "", town: "", place: "", price: "", desc: "", date: "", tags: "", image: null as File | null,
+    isAllAges: false, is18Plus: false, is21Plus: false // Defaults added
   });
 
   const todayStr = useMemo(() => dayjs().format('YYYY-MM-DD'), []);
@@ -58,7 +64,7 @@ export function CalendarLogic({ city }: { city: string }) {
     setUserId(storedId);
   }, []);
 
-  // --- NEW: Fetch unique town names for the Saved Locations pool ---
+  // Fetch unique town names for the Saved Locations pool
   useEffect(() => {
     const fetchUniqueTowns = async () => {
       const { data, error } = await supabase
@@ -67,14 +73,13 @@ export function CalendarLogic({ city }: { city: string }) {
         .not('town_name', 'is', null);
 
       if (!error && data) {
-        // Extract unique values and sort alphabetically
         const unique = Array.from(new Set(data.map((item: any) => item.town_name)))
           .sort((a: any, b: any) => a.localeCompare(b));
         setSavedLocations(unique);
       }
     };
     fetchUniqueTowns();
-  }, [events]); // Refresh pool when new flyers are added
+  }, [events]);
 
   useEffect(() => {
     const fetchWeightedTags = async () => {
@@ -123,7 +128,10 @@ export function CalendarLogic({ city }: { city: string }) {
   useEffect(() => { fetchEvents(); }, [currentDate, city, activeTowns]);
 
   const handleClosePostModal = () => {
-    setFormState({ title: "", town: "", place: "", price: "", desc: "", date: "", tags: "", image: null });
+    setFormState({ 
+      title: "", town: "", place: "", price: "", desc: "", date: "", tags: "", image: null,
+      isAllAges: false, is18Plus: false, is21Plus: false 
+    });
     setIsPostModalOpen(false);
   };
 
@@ -133,6 +141,7 @@ export function CalendarLogic({ city }: { city: string }) {
     const townSlug = slugify(formState.town);
     if (BANNED_WORDS_SET.has(townSlug)) return alert("Prohibited location name.");
 
+    // Tags are already synced in PostEventModal, but we clean them here for insertion
     const tags = formState.tags.split(',').map((t: string) => slugify(t)).filter((t: string) => t !== "");
     if (tags.some((tag: string) => BANNED_WORDS_SET.has(tag))) return alert("One or more tags prohibited.");
 
@@ -171,20 +180,30 @@ export function CalendarLogic({ city }: { city: string }) {
     } finally { setIsUploading(false); }
   };
 
+  // --- UPDATED: Filtering Logic for Age Restrictions ---
   const filteredEvents = useMemo(() => {
     return events.filter((e: any) => {
       if (activeTowns.length > 0 && !activeTowns.includes(e.town_name)) return false;
+      
+      const eventTags = e.flyer_tags.map((ft: any) => slugify(ft.tags.name));
+
+      // Age Toggle Logic
+      if (showAllAges && !eventTags.includes("all-ages")) return false;
+      if (show18 && !eventTags.includes("18+")) return false;
+      if (show21 && !eventTags.includes("21+")) return false;
+
       const totalVotes = e.flyer_tags.reduce((acc: number, ft: any) => acc + Math.max(0, ft.vote_count || 0), 0);
       const isSpam = totalVotes > 0 && ((e.flyer_tags.find((ft: any) => slugify(ft.tags.name) === 'spam')?.vote_count || 0) / totalVotes >= 0.25);
+      
       if (isSpam && !showSpam) return false;
       if (showAllEvents) return true;
       if (activeTags.length === 0) return true;
-      const eventTags = e.flyer_tags.map((ft: any) => slugify(ft.tags.name));
+      
       return filterMode === 'OR' 
         ? activeTags.some((tag: string) => eventTags.includes(slugify(tag))) 
         : activeTags.every((tag: string) => eventTags.includes(slugify(tag)));
     }).sort((a: any, b: any) => b.flyer_tags.length - a.flyer_tags.length);
-  }, [events, activeTags, activeTowns, filterMode, showAllEvents, showSpam]);
+  }, [events, activeTags, activeTowns, filterMode, showAllEvents, showSpam, showAllAges, show18, show21]);
 
   return (
     <div className="flex min-h-screen font-mono text-sm text-white bg-black">
@@ -192,12 +211,16 @@ export function CalendarLogic({ city }: { city: string }) {
         currentCity={city} 
         activeTags={activeTags} setActiveTags={setActiveTags} 
         activeTowns={activeTowns} setActiveTowns={setActiveTowns} 
-        savedLocations={savedLocations} // Pass dynamic pool to Sidebar
+        savedLocations={savedLocations} 
         filterMode={filterMode} setFilterMode={setFilterMode} 
         trendingTags={weightedTags} 
         onTrendingClick={() => setIsTrendingModalOpen(true)} 
         showAllEvents={showAllEvents} setShowAllEvents={setShowAllEvents} 
         showSpam={showSpam} setShowSpam={setShowSpam} 
+        // Passing Age Toggles to Sidebar
+        showAllAges={showAllAges} setShowAllAges={setShowAllAges}
+        show18={show18} setShow18={setShow18}
+        show21={show21} setShow21={setShow21}
         onAddEvent={() => { 
           setFormState({...formState, date: todayStr, town: city || activeTowns[0] || ""}); 
           setIsPostModalOpen(true); 
@@ -211,7 +234,7 @@ export function CalendarLogic({ city }: { city: string }) {
            currentDate={currentDate} 
            setCurrentDate={setCurrentDate} 
            activeTowns={activeTowns} 
-           setActiveTowns={setActiveTowns} // Restore ability to clear bucket from header
+           setActiveTowns={setActiveTowns} 
            onMenuClick={() => setIsSidebarOpen(true)} 
         />
         
