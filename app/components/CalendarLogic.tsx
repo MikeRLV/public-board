@@ -37,6 +37,7 @@ export function CalendarLogic({ city }: { city: string }) {
   const [weightedTags, setWeightedTags] = useState<{name: string, weight: number}[]>([]);
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [activeTowns, setActiveTowns] = useState<string[]>([]); 
+  const [savedLocations, setSavedLocations] = useState<string[]>([]); // New state for dynamic town pool
   const [filterMode, setFilterMode] = useState<'OR' | 'AND'>('OR'); 
   const [showAllEvents, setShowAllEvents] = useState(false); 
   const [showSpam, setShowSpam] = useState(false); 
@@ -57,6 +58,24 @@ export function CalendarLogic({ city }: { city: string }) {
     setUserId(storedId);
   }, []);
 
+  // --- NEW: Fetch unique town names for the Saved Locations pool ---
+  useEffect(() => {
+    const fetchUniqueTowns = async () => {
+      const { data, error } = await supabase
+        .from('flyers')
+        .select('town_name')
+        .not('town_name', 'is', null);
+
+      if (!error && data) {
+        // Extract unique values and sort alphabetically
+        const unique = Array.from(new Set(data.map((item: any) => item.town_name)))
+          .sort((a: any, b: any) => a.localeCompare(b));
+        setSavedLocations(unique);
+      }
+    };
+    fetchUniqueTowns();
+  }, [events]); // Refresh pool when new flyers are added
+
   useEffect(() => {
     const fetchWeightedTags = async () => {
       const { data, error } = await supabase.from('flyer_tags').select('vote_count, tags(name)').limit(500);
@@ -75,7 +94,6 @@ export function CalendarLogic({ city }: { city: string }) {
     fetchWeightedTags();
   }, [events]);
 
-  // --- UPDATED SQL FETCH WITH "OR" LOGIC ---
   const fetchEvents = async () => {
     const start = currentDate.startOf('month').toISOString();
     const end = currentDate.endOf('month').toISOString();
@@ -88,15 +106,13 @@ export function CalendarLogic({ city }: { city: string }) {
 
     const citySlug = city ? slugify(city) : null;
 
-    // We build an "OR" filter to catch both the project city and dynamic town tags
     if (activeTowns.length > 0 || citySlug) {
-      const townFilters = activeTowns.map(t => `town_name.eq.${t}`);
+      const townFilters = activeTowns.map((t: string) => `town_name.eq.${t}`);
       const cityFilter = citySlug ? `city_slug.eq.${citySlug}` : '';
-      
       const orFilter = [...townFilters, cityFilter].filter(Boolean).join(',');
       query = query.or(orFilter);
     } else {
-      setEvents([]); // Nothing selected, show empty
+      setEvents([]);
       return;
     }
 
@@ -117,8 +133,8 @@ export function CalendarLogic({ city }: { city: string }) {
     const townSlug = slugify(formState.town);
     if (BANNED_WORDS_SET.has(townSlug)) return alert("Prohibited location name.");
 
-    const tags = formState.tags.split(',').map(t => slugify(t)).filter(t => t !== "");
-    if (tags.some(tag => BANNED_WORDS_SET.has(tag))) return alert("One or more tags prohibited.");
+    const tags = formState.tags.split(',').map((t: string) => slugify(t)).filter((t: string) => t !== "");
+    if (tags.some((tag: string) => BANNED_WORDS_SET.has(tag))) return alert("One or more tags prohibited.");
 
     setIsUploading(true);
     try {
@@ -128,7 +144,6 @@ export function CalendarLogic({ city }: { city: string }) {
       if (uploadError) throw uploadError;
 
       const { data: urlData } = supabase.storage.from('flyers').getPublicUrl(fileName);
-      
       const targetCity = city || townSlug;
 
       const { data: insertedData, error: insertError } = await supabase.from('flyers').insert({
@@ -157,22 +172,18 @@ export function CalendarLogic({ city }: { city: string }) {
   };
 
   const filteredEvents = useMemo(() => {
-    return events.filter(e => {
-      // Secondary UI-side check for active bucket
+    return events.filter((e: any) => {
       if (activeTowns.length > 0 && !activeTowns.includes(e.town_name)) return false;
-
       const totalVotes = e.flyer_tags.reduce((acc: number, ft: any) => acc + Math.max(0, ft.vote_count || 0), 0);
       const isSpam = totalVotes > 0 && ((e.flyer_tags.find((ft: any) => slugify(ft.tags.name) === 'spam')?.vote_count || 0) / totalVotes >= 0.25);
-      
       if (isSpam && !showSpam) return false;
       if (showAllEvents) return true;
       if (activeTags.length === 0) return true;
-      
       const eventTags = e.flyer_tags.map((ft: any) => slugify(ft.tags.name));
       return filterMode === 'OR' 
-        ? activeTags.some(tag => eventTags.includes(slugify(tag))) 
-        : activeTags.every(tag => eventTags.includes(slugify(tag)));
-    }).sort((a, b) => b.flyer_tags.length - a.flyer_tags.length);
+        ? activeTags.some((tag: string) => eventTags.includes(slugify(tag))) 
+        : activeTags.every((tag: string) => eventTags.includes(slugify(tag)));
+    }).sort((a: any, b: any) => b.flyer_tags.length - a.flyer_tags.length);
   }, [events, activeTags, activeTowns, filterMode, showAllEvents, showSpam]);
 
   return (
@@ -181,13 +192,14 @@ export function CalendarLogic({ city }: { city: string }) {
         currentCity={city} 
         activeTags={activeTags} setActiveTags={setActiveTags} 
         activeTowns={activeTowns} setActiveTowns={setActiveTowns} 
+        savedLocations={savedLocations} // Pass dynamic pool to Sidebar
         filterMode={filterMode} setFilterMode={setFilterMode} 
         trendingTags={weightedTags} 
         onTrendingClick={() => setIsTrendingModalOpen(true)} 
         showAllEvents={showAllEvents} setShowAllEvents={setShowAllEvents} 
         showSpam={showSpam} setShowSpam={setShowSpam} 
         onAddEvent={() => { 
-          setFormState({...formState, date: todayStr, town: city || ""}); 
+          setFormState({...formState, date: todayStr, town: city || activeTowns[0] || ""}); 
           setIsPostModalOpen(true); 
         }}
         isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} 
@@ -195,7 +207,13 @@ export function CalendarLogic({ city }: { city: string }) {
       />
       
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        <CalendarHeader currentDate={currentDate} setCurrentDate={setCurrentDate} city={city || activeTowns[0]} onMenuClick={() => setIsSidebarOpen(true)} />
+        <CalendarHeader 
+           currentDate={currentDate} 
+           setCurrentDate={setCurrentDate} 
+           activeTowns={activeTowns} 
+           setActiveTowns={setActiveTowns} // Restore ability to clear bucket from header
+           onMenuClick={() => setIsSidebarOpen(true)} 
+        />
         
         {activeTowns.length === 0 && !city ? (
           <div className="flex-1 flex flex-col items-center justify-center p-10 text-center bg-neutral-900/20">
@@ -215,9 +233,9 @@ export function CalendarLogic({ city }: { city: string }) {
             activeDay={activeDay} 
             events={filteredEvents} 
             onClose={() => setActiveDay(null)} 
-            onVote={() => {}} 
+            onVote={fetchEvents} 
             onPostClick={(d: string) => { 
-               setFormState({...formState, date: d, town: city || ""}); 
+               setFormState({...formState, date: d, town: city || activeTowns[0] || ""}); 
                setIsPostModalOpen(true); 
             }} 
           />

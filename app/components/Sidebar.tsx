@@ -1,23 +1,36 @@
 "use client";
-import { useState, useEffect } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { BANNED_WORDS_SET } from "../lib/bannedWords";
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
-
-export function Sidebar({ currentCity, activeTags = [], setActiveTags, activeTowns = [], setActiveTowns, filterMode, setFilterMode, trendingTags = [], onTrendingClick, showAllEvents, setShowAllEvents, showSpam, setShowSpam, onAddEvent, isOpen, onClose }: any) {
+export function Sidebar({ 
+  currentCity, 
+  activeTags = [], 
+  setActiveTags, 
+  activeTowns = [], 
+  setActiveTowns, 
+  savedLocations = [], 
+  filterMode, 
+  setFilterMode, 
+  trendingTags = [], 
+  onTrendingClick, 
+  showAllEvents, 
+  setShowAllEvents, 
+  showSpam, 
+  setShowSpam, 
+  onAddEvent, 
+  isOpen, 
+  onClose 
+}: any) {
   const router = useRouter();
   const [townInput, setTownInput] = useState("");
 
-  // Normalization logic: converts "Las Vegas" to "las-vegas"
   const slugify = (text: string) => 
     text.toLowerCase().trim().replace(/[\s_]+/g, "-").replace(/[^\w-]+/g, "").replace(/--+/g, "-").replace(/^-+|-+$/g, "");
 
   const handleAddTown = (val: string) => {
     const slug = slugify(val);
     if (!slug) return;
-    
     if (BANNED_WORDS_SET.has(slug)) return alert("Prohibited location name.");
     
     if (!activeTowns.includes(slug)) {
@@ -35,34 +48,67 @@ export function Sidebar({ currentCity, activeTags = [], setActiveTags, activeTow
         <div className="space-y-4">
           <h1 className="text-xl font-bold text-yellow-500 tracking-tighter leading-none whitespace-nowrap uppercase">B LoCAL</h1>
           
-          {/* LOCATION SECTION */}
-          <div className="space-y-2 border-b border-white/5 pb-4">
-            <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest leading-none">Location</div>
+          {/* Post Event Button at the top */}
+          <button 
+            onClick={onAddEvent} 
+            className="w-full py-3 mt-2 font-bold text-xs uppercase bg-yellow-600 text-black hover:bg-yellow-500 transition-all shadow-lg active:scale-95"
+          >
+            Post Event
+          </button>
+
+          {/* 1. SAVED LIST */}
+          <div className="flex flex-col gap-1 pt-2">
+            <div className="text-[10px] font-bold text-neutral-600 uppercase tracking-[0.2em] ml-1 mb-1">Saved</div>
+            <div className="flex flex-col border-y border-white/[0.05] py-1 max-h-48 overflow-y-auto custom-scrollbar">
+              {savedLocations.length > 0 ? (
+                savedLocations
+                  .filter((loc: string) => !activeTowns.includes(loc))
+                  .map((loc: string) => (
+                    <button
+                      key={loc}
+                      onClick={() => handleAddTown(loc)}
+                      className="group flex justify-between items-center py-2 px-2 hover:bg-white/[0.03] border-b border-white/[0.02] last:border-0 transition-colors"
+                    >
+                      <span className="text-[10px] font-bold text-neutral-400 group-hover:text-yellow-500/80 uppercase transition-colors">
+                        {loc.replace(/-/g, ' ')}
+                      </span>
+                      <span className="text-[10px] text-neutral-700 font-black group-hover:text-yellow-500">+</span>
+                    </button>
+                  ))
+              ) : (
+                <span className="text-[9px] text-neutral-800 uppercase italic p-2 tracking-widest text-center">Discovering areas...</span>
+              )}
+            </div>
+          </div>
+
+          {/* 2. LOCATION INPUT & ACTIVE CHIPS */}
+          <div className="space-y-3 pt-2">
             <input 
-              className="w-full bg-neutral-900 border border-neutral-700 text-xs p-2 outline-none focus:border-yellow-500 transition-colors" 
+              className="w-full bg-neutral-900 border border-neutral-700 text-xs p-2 outline-none focus:border-yellow-500 transition-colors uppercase font-bold" 
               placeholder="Location(s)" 
               value={townInput}
               onChange={e => setTownInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleAddTown(townInput)}
             />
             
-            <div className="flex flex-wrap gap-1 mt-2">
+            <div className="flex flex-wrap gap-1">
               {activeTowns.map((t: string) => (
                 <span 
                   key={t} 
                   onClick={() => setActiveTowns(activeTowns.filter((item: string) => item !== t))} 
-                  className="bg-yellow-900/40 border border-yellow-500/30 px-2 py-0.5 text-[8px] font-bold cursor-pointer hover:bg-red-900 hover:border-red-500 transition-colors uppercase"
+                  className="bg-yellow-900/40 border border-yellow-600/50 px-2 py-0.5 text-[8px] font-bold cursor-pointer hover:bg-red-900/40 hover:border-red-500 transition-all uppercase"
                 >
-                  {t} ×
+                  {t.replace(/-/g, ' ')} ×
                 </span>
               ))}
             </div>
           </div>
 
-          <button onClick={onAddEvent} className="w-full py-3 font-bold text-xs uppercase bg-yellow-600 text-black hover:bg-yellow-500 transition-all shadow-lg active:scale-95">Post Event</button>
+          {/* 3. BUFFER: Now situated under the location logic */}
+          <div className="h-8" />
         </div>
 
-        {/* TRENDING */}
+        {/* TRENDING SECTION - Preserved */}
         <div className="flex flex-col gap-3 border-t border-white/5 pt-4">
           <button onClick={onTrendingClick} className="group flex items-center gap-2 text-left w-full">
             <div className="flex items-center animate-pulse">
@@ -80,7 +126,7 @@ export function Sidebar({ currentCity, activeTags = [], setActiveTags, activeTow
           </div>
         </div>
 
-        {/* FILTERS */}
+        {/* FILTERS SECTION - Preserved */}
         <div className="flex flex-col gap-4 border-t border-white/5 pt-4">
           <div className="flex justify-between items-center text-[10px]">
             <div className="font-bold text-neutral-500 uppercase tracking-widest">Filters</div>
@@ -119,8 +165,6 @@ export function Sidebar({ currentCity, activeTags = [], setActiveTags, activeTow
               <div className={`w-4 h-4 border transition-all rounded-sm ${showAllEvents ? 'bg-emerald-600 border-emerald-600 shadow-lg' : 'border-neutral-700'}`} />
               <span className="text-[10px] font-bold text-neutral-500 uppercase group-hover:text-neutral-300 transition-colors">Show All</span>
            </button>
-           
-           {/* RESTORED SHOW SPAM BUTTON */}
            <button className="flex items-center gap-3 group w-full text-left" onClick={() => setShowSpam(!showSpam)}>
               <div className={`w-4 h-4 border transition-all rounded-sm ${showSpam ? 'bg-red-600 border-red-600 shadow-lg' : 'border-neutral-700'}`} />
               <span className="text-[10px] font-bold text-neutral-500 uppercase group-hover:text-neutral-300 transition-colors">Show Spam</span>

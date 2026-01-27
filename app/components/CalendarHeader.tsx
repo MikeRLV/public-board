@@ -1,9 +1,31 @@
 "use client";
+import { useState, useRef, useEffect } from "react";
 import dayjs from "dayjs";
+import localeData from "dayjs/plugin/localeData";
 
-export function CalendarHeader({ currentDate, setCurrentDate, city, onMenuClick }: any) {
+dayjs.extend(localeData);
+
+export function CalendarHeader({ currentDate, setCurrentDate, activeTowns = [], onMenuClick, setActiveTowns }: any) {
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+        setIsPickerOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const months = dayjs.months(); 
+  const currentYear = currentDate.year();
+  const years = Array.from({ length: 5 }, (_, i: number) => currentYear - 2 + i);
+
   return (
-    <div className="grid grid-cols-3 items-center p-6 border-b border-white/10 bg-black sticky top-0 z-40">
+    <div className="grid grid-cols-3 items-center p-6 border-b border-white/10 bg-black sticky top-0 z-50">
+      {/* 1. LEFT: Mobile Menu */}
       <div className="flex justify-start">
         <button 
           onClick={onMenuClick} 
@@ -13,37 +35,98 @@ export function CalendarHeader({ currentDate, setCurrentDate, city, onMenuClick 
         </button>
       </div>
 
-      <div className="flex items-center justify-center gap-8">
-        {city && (
-          <button 
-            onClick={() => setCurrentDate(currentDate.subtract(1, "month"))} 
-            className="text-xl text-neutral-500 hover:text-white transition-colors"
-          >
-            &lt;
-          </button>
-        )}
-        <div className="flex flex-col items-center text-center">
-          <div className="text-3xl font-bold text-yellow-500 uppercase tracking-tighter leading-none whitespace-nowrap">
-            {currentDate.format("MMM YYYY")}
+      {/* 2. CENTER: Navigation & Merged Towns List */}
+      <div className="flex items-center justify-center gap-6">
+        <button 
+          onClick={() => setCurrentDate(currentDate.subtract(1, "month"))} 
+          className="text-2xl text-neutral-500 hover:text-yellow-500 transition-colors font-light"
+        >
+          &lt;
+        </button>
+        
+        <div className="relative flex flex-col items-center text-center" ref={pickerRef}>
+          {/* FIX: Changed from <button> to <div> to prevent hydration error (button-in-button) */}
+          <div className="flex flex-col items-center gap-1">
+            <button 
+              onClick={() => setIsPickerOpen(!isPickerOpen)}
+              className="group text-3xl font-black text-yellow-500 uppercase tracking-tighter leading-none whitespace-nowrap hover:text-yellow-400 transition-colors"
+            >
+              {currentDate.format("MMM YYYY")}
+            </button>
+            
+            {/* Merged Town Labels Section */}
+            <div className="flex flex-wrap justify-center gap-x-2 h-3">
+              {activeTowns.length > 0 ? (
+                activeTowns.map((town: string, index: number) => (
+                  <span key={town} className="text-[9px] text-neutral-600 uppercase tracking-widest whitespace-nowrap font-bold">
+                    {town.replace(/-/g, " ")}
+                    {index < activeTowns.length - 1 && <span className="ml-2 text-neutral-800">•</span>}
+                  </span>
+                ))
+              ) : (
+                <button 
+                   onClick={(e) => {
+                     e.stopPropagation();
+                     if (setActiveTowns) setActiveTowns([]); 
+                   }}
+                   className="text-[9px] text-neutral-800 uppercase tracking-widest font-black hover:text-neutral-500 transition-colors"
+                >
+                  Global View
+                </button>
+              )}
+            </div>
           </div>
-          {city && (
-            <div className="text-[10px] text-neutral-500 uppercase mt-1 tracking-widest whitespace-nowrap">
-              {city.replace(/-/g, " ")}
+
+          {/* Month/Year Dropdown Menu */}
+          {isPickerOpen && (
+            <div className="absolute top-full mt-4 w-64 bg-neutral-900 border border-yellow-600/50 rounded-lg shadow-2xl p-4 grid grid-cols-2 gap-4 animate-in fade-in zoom-in duration-150 z-[100]">
+              <div className="flex flex-col gap-1 border-r border-white/5 pr-4">
+                <span className="text-[8px] text-neutral-500 font-black uppercase mb-2 tracking-widest text-center">Month</span>
+                {months.map((m: string, i: number) => (
+                  <button
+                    key={m}
+                    onClick={() => {
+                      setCurrentDate(currentDate.month(i));
+                      setIsPickerOpen(false);
+                    }}
+                    className={`text-[10px] uppercase font-bold py-1 px-2 rounded-sm text-left transition-colors ${currentDate.month() === i ? 'bg-yellow-600 text-black' : 'text-neutral-400 hover:bg-white/5'}`}
+                  >
+                    {m.substring(0, 3)}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[8px] text-neutral-500 font-black uppercase mb-2 tracking-widest text-center">Year</span>
+                {years.map((y: number) => (
+                  <button
+                    key={y}
+                    onClick={() => {
+                      setCurrentDate(currentDate.year(y));
+                      setIsPickerOpen(false);
+                    }}
+                    className={`text-[10px] font-black py-2 px-2 rounded-sm transition-colors ${currentYear === y ? 'bg-yellow-600 text-black' : 'text-neutral-400 hover:bg-white/5'}`}
+                  >
+                    {y}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
-        {city && (
-          <button 
-            onClick={() => setCurrentDate(currentDate.add(1, "month"))} 
-            className="text-xl text-neutral-500 hover:text-white transition-colors"
-          >
-            &gt;
-          </button>
-        )}
+
+        <button 
+          onClick={() => setCurrentDate(currentDate.add(1, "month"))} 
+          className="text-2xl text-neutral-500 hover:text-yellow-500 transition-colors font-light"
+        >
+          &gt;
+        </button>
       </div>
 
-      <div className="flex justify-end">
-        {/* Export button removed from here */}
+      {/* 3. RIGHT: Sync Indicator */}
+      <div className="flex justify-end pr-2">
+        <div className="text-[8px] text-neutral-800 font-black uppercase tracking-widest vertical-rl rotate-180">
+          LoCAL Bull V2.6
+        </div>
       </div>
     </div>
   );

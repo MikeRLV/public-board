@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 
+// Fix: Ensure this is a NAMED EXPORT to match your import in CalendarLogic
 export function PostEventModal({ isOpen, onClose, formState, setFormState, onSave, isUploading, todayStr, bannedWords = [] }: any) {
   
   const slugify = (text: string) => 
@@ -11,22 +12,20 @@ export function PostEventModal({ isOpen, onClose, formState, setFormState, onSav
     const p = formState.price.toLowerCase().trim();
     const isFreePrice = (p === "0" || p === "$0" || p === "free");
     
-    // Explicitly typing 't' as string to resolve TS7006 errors
+    // Fix: Explicitly type 't' as string
     const tagsArray = formState.tags.split(',').map((t: string) => t.trim());
     const hasFreeTag = tagsArray.some((t: string) => t.toLowerCase() === "free");
 
     if (isFreePrice && !hasFreeTag) {
-      // ADD: Price is free but tag is missing
       const updatedTags = formState.tags.trim() 
         ? (formState.tags.trim().endsWith(',') ? `${formState.tags} free, ` : `${formState.tags}, free, `)
         : "free, ";
       setFormState({ ...formState, tags: updatedTags });
 
     } else if (!isFreePrice && hasFreeTag) {
-      // REMOVE: Price is paid but "free" tag exists
       const filteredTags = tagsArray
-        .filter((t: string) => t.toLowerCase() !== "free") // Fix for Ln 28
-        .filter((t: string) => t !== "")                 // Fix for Ln 29
+        .filter((t: string) => t.toLowerCase() !== "free") // Fix: Explicit type
+        .filter((t: string) => t !== "")                  // Fix: Explicit type
         .join(', ');
       
       const finalTags = filteredTags ? `${filteredTags}, ` : "";
@@ -48,7 +47,7 @@ export function PostEventModal({ isOpen, onClose, formState, setFormState, onSav
           <div className="flex flex-col gap-1">
              <input 
                required
-               className="w-full bg-black border border-neutral-700 p-3 text-white text-xs outline-none focus:border-yellow-500 font-mono" 
+               className="w-full bg-black border border-neutral-700 p-3 text-white text-xs outline-none focus:border-yellow-500 font-mono lowercase" 
                placeholder="LOCATION" 
                value={formState.town} 
                onChange={e => {
@@ -66,19 +65,11 @@ export function PostEventModal({ isOpen, onClose, formState, setFormState, onSav
           <input className="w-full bg-black border border-neutral-700 p-3 text-white text-xs outline-none focus:border-yellow-500 font-mono" placeholder="VENUE NAME" value={formState.place} onChange={e => setFormState({ ...formState, place: e.target.value })} />
           <input className="w-full bg-black border border-neutral-700 p-3 text-white text-xs outline-none focus:border-yellow-500 font-mono" placeholder="PRICE" value={formState.price} onChange={e => setFormState({ ...formState, price: e.target.value })} />
           
-          <div className="relative">
-            <input 
-              className="w-full bg-black border border-neutral-700 p-3 text-white text-xs outline-none focus:border-yellow-500 font-mono" 
-              placeholder="TAGS (comma separated)" 
-              value={formState.tags} 
-              onChange={e => setFormState({ ...formState, tags: e.target.value })} 
-            />
-          </div>
+          <input className="w-full bg-black border border-neutral-700 p-3 text-white text-xs outline-none focus:border-yellow-500 font-mono" placeholder="TAGS (comma separated)" value={formState.tags} onChange={e => setFormState({ ...formState, tags: e.target.value })} />
 
           <textarea className="w-full bg-black border border-neutral-700 p-3 text-white h-24 text-xs outline-none resize-none focus:border-yellow-500" placeholder="DESCRIPTION / DETAILS..." value={formState.desc} onChange={e => setFormState({ ...formState, desc: e.target.value })} />
           
           <div className="flex flex-col gap-2 pt-2">
-            <label className="text-[10px] text-neutral-500 uppercase font-bold ml-1 tracking-widest">Flyer Image</label>
             <div className="relative border border-neutral-700 bg-black p-3 rounded-sm flex items-center justify-between">
               <input type="file" accept=".jpg,.jpeg,.png" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => setFormState({ ...formState, image: e.target.files?.[0] || null })} />
               <span className="text-[10px] text-neutral-400 truncate">{formState.image ? formState.image.name : "SELECT FILE"}</span>
@@ -88,12 +79,8 @@ export function PostEventModal({ isOpen, onClose, formState, setFormState, onSav
         </div>
 
         <div className="flex gap-4 mt-8">
-          <button onClick={onClose} className="flex-1 py-3 text-xs font-bold border border-neutral-700 uppercase hover:bg-white/5">Cancel</button>
-          <button 
-            onClick={onSave} 
-            disabled={isUploading || !formState.town} 
-            className="flex-1 py-3 text-xs font-bold uppercase transition-all bg-yellow-600 text-black hover:bg-yellow-500 disabled:opacity-50"
-          >
+          <button onClick={onClose} className="flex-1 py-3 text-xs font-bold border border-neutral-700 uppercase">Cancel</button>
+          <button onClick={onSave} disabled={isUploading || !formState.town} className="flex-1 py-3 text-xs font-bold uppercase bg-yellow-600 text-black disabled:opacity-50">
             {isUploading ? "UPLOADING..." : "Post Flyer"}
           </button>
         </div>
