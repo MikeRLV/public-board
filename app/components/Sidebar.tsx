@@ -40,7 +40,7 @@ export function Sidebar({ currentCity, activeTags = [], setActiveTags, activeTow
             <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest leading-none">Location</div>
             <input 
               className="w-full bg-neutral-900 border border-neutral-700 text-xs p-2 outline-none focus:border-yellow-500 transition-colors" 
-              placeholder="Add a Town" 
+              placeholder="Location(s)]" 
               value={townInput}
               onChange={e => setTownInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleAddTown(townInput)}
