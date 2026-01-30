@@ -34,7 +34,8 @@ export function Sidebar({
       
       <div 
         style={{ "--text-scale": textScale } as any}
-        className={`fixed md:sticky top-0 left-0 z-[80] md:z-0 w-64 h-screen bg-black border-r border-white/20 p-4 flex flex-col gap-4 font-mono text-white transition-all duration-300 overflow-x-visible ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
+        /* FIXED: Changed h-screen to h-[100dvh] for mobile viewport stability */
+        className={`fixed md:sticky top-0 left-0 z-[80] md:z-0 w-64 h-[100dvh] bg-black border-r border-white/20 p-4 flex flex-col gap-4 font-mono text-white transition-all duration-300 overflow-x-visible ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
       >
         <button onClick={onClose} style={scaled(11)} className="md:hidden self-end text-neutral-500 mb-2 uppercase tracking-widest">Close X</button>
         
