@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { BANNED_WORDS_SET } from "../lib/bannedWords";
 
@@ -13,6 +13,19 @@ export function Sidebar({
   const router = useRouter();
   const [townInput, setTownInput] = useState("");
   const [textScale, setTextScale] = useState(1.0);
+
+  // PERSISTENCE: Load saved scale on initial mount
+  useEffect(() => {
+    const savedScale = localStorage.getItem("blocal_text_scale");
+    if (savedScale) {
+      setTextScale(parseFloat(savedScale));
+    }
+  }, []);
+
+  // PERSISTENCE: Save scale to cache whenever it changes
+  useEffect(() => {
+    localStorage.setItem("blocal_text_scale", textScale.toString());
+  }, [textScale]);
 
   const slugify = (text: string) => 
     text.toLowerCase().trim().replace(/[\s_]+/g, "-").replace(/[^\w-+]+/g, "").replace(/--+/g, "-").replace(/^-+|-+$/g, "");
@@ -34,7 +47,6 @@ export function Sidebar({
       
       <div 
         style={{ "--text-scale": textScale } as any}
-        /* Mobile viewport stability fix */
         className={`fixed md:sticky top-0 left-0 z-[80] md:z-0 w-64 h-[100dvh] bg-black border-r border-white/20 p-4 flex flex-col gap-4 font-mono text-white transition-all duration-300 overflow-x-visible ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
       >
         <button onClick={onClose} style={scaled(11)} className="md:hidden self-end text-neutral-500 mb-2 uppercase tracking-widest">Close X</button>
@@ -88,7 +100,6 @@ export function Sidebar({
               </div>
             </div>
             
-            {/* UPDATED: flex-wrap enabled for "word wrap" */}
             <div className="flex flex-wrap gap-1 max-w-full overflow-hidden">
               {activeTowns.map((t: string) => (
                 <span key={t} onClick={() => setActiveTowns(activeTowns.filter((item: string) => item !== t))} 
@@ -101,10 +112,10 @@ export function Sidebar({
           </div>
         </div>
 
-        {/* Divider line */}
+        {/* ANCHORED LINE */}
         <div className="w-full border-t-2 border-white/10 mt-2" />
 
-        {/* SECTION: Trending Discovery (Above Filters) */}
+        {/* SECTION: Trending Discovery */}
         <div className={`flex flex-col gap-3 pt-4 w-full overflow-hidden transition-opacity ${!hasLocation && !showAllEvents ? 'opacity-20 pointer-events-none' : ''}`}>
           <button onClick={onTrendingClick} className="group flex items-center gap-2 text-left w-full">
             <span className="w-1.5 h-1.5 bg-red-600 rounded-full mr-2 shadow-[0_0_5px_rgba(220,38,38,0.3)]" /> 
@@ -149,7 +160,6 @@ export function Sidebar({
               }} 
             />
 
-            {/* UPDATED: flex-wrap enabled for tag chips */}
             <div className="flex flex-wrap gap-1 max-w-full overflow-hidden pt-1">
               {activeTags.map((tag: string) => (
                 <span 
