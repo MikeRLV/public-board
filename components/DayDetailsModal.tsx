@@ -33,8 +33,8 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
   };
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 font-mono" onClick={onClose}>
-      <div className="bg-neutral-900 w-full max-w-5xl h-[85vh] border border-white/10 rounded-xl flex flex-col overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm p-2 md:p-4 font-mono" onClick={onClose}>
+      <div className="bg-neutral-900 w-full max-w-5xl h-[95vh] md:h-[85vh] border border-white/10 rounded-xl flex flex-col overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
         
         {/* Modal Header */}
         <div className="flex justify-between items-center p-4 border-b border-white/10 bg-black shrink-0">
@@ -47,7 +47,7 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
           <button onClick={onClose} className="text-2xl text-neutral-500 hover:text-white transition-colors leading-none">×</button>
         </div>
         
-        <div className="flex-1 overflow-y-auto p-8 space-y-12 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 md:space-y-12 custom-scrollbar">
           {/* Post Invitation Section */}
           <div className="border border-dashed border-yellow-500/30 rounded-lg p-6 bg-yellow-500/5 flex flex-col items-center justify-center gap-3">
             <p className="text-[10px] text-neutral-400 uppercase tracking-widest font-bold text-center">
@@ -64,51 +64,47 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
             const sortedTags = [...(e.flyer_tags || [])].sort((a, b) => (b.vote_count || 0) - (a.vote_count || 0));
             
             return (
-              <div key={e.id} className="bg-black/40 rounded-lg border border-white/5 p-8 md:p-12 shadow-2xl">
-                <div className="flex flex-col md:flex-row gap-12 items-start">
+              <div key={e.id} className="bg-black/40 rounded-lg border border-white/5 p-4 md:p-12 shadow-2xl">
+                <div className="flex flex-col md:flex-row gap-8 md:gap-12 items-start">
                   
-                  {/* LEFT COLUMN: Sticky Flyer + Title + Metadata Stack */}
-                  <div className="w-full md:w-2/5 sticky top-0 self-start pt-2">
-                    <div className="relative group flex items-center justify-center mb-10">
-                      <div className="absolute -inset-3 border border-white/10 rounded-sm pointer-events-none group-hover:border-yellow-500/20 transition-colors" />
+                  {/* LEFT COLUMN: md:sticky keeps it pinned on desktop only */}
+                  <div className="w-full md:w-2/5 md:sticky md:top-0 self-start pt-2">
+                    <div className="relative group flex items-center justify-center mb-6 md:mb-10">
+                      <div className="absolute -inset-3 border border-white/10 rounded-sm pointer-events-none group-hover:border-yellow-500/20 transition-colors hidden md:block" />
                       {e.image_url ? (
                         <img 
                           src={e.image_url} 
                           alt="Flyer" 
-                          className="w-full h-auto object-contain max-h-[50vh] shadow-[0_0_30px_rgba(0,0,0,0.5)] relative z-0" 
+                          className="w-full h-auto object-contain max-h-[40vh] md:max-h-[50vh] shadow-[0_0_30px_rgba(0,0,0,0.5)] relative z-0" 
                         />
                       ) : (
-                        <div className="w-full h-64 bg-neutral-900 flex items-center justify-center border border-white/5 italic text-neutral-600 text-[10px] uppercase tracking-tighter">
+                        <div className="w-full h-48 md:h-64 bg-neutral-900 flex items-center justify-center border border-white/5 italic text-neutral-600 text-[10px] uppercase tracking-tighter">
                           No Flyer Projected
                         </div>
                       )}
                     </div>
 
-                    <h3 className="text-3xl md:text-5xl font-black text-yellow-500 uppercase leading-[0.9] tracking-tighter break-words">
+                    <h3 className="text-2xl md:text-5xl font-black text-yellow-500 uppercase leading-[0.9] tracking-tighter break-words mb-4 md:mb-0">
                       {e.title}
                     </h3>
 
-                    {/* Divider Line */}
-                    <div className="w-full h-px bg-white/10 my-6" />
+                    <div className="w-full h-px bg-white/10 my-4 md:my-6" />
 
-                    {/* METADATA SECTION: Aligned Spam Button to the right of Price */}
                     <div className="flex flex-col gap-4">
-                      {/* Location Row */}
-                      <div className="text-[14px] font-black tracking-tighter uppercase leading-none">
+                      <div className="text-[12px] md:text-[14px] font-black tracking-tighter uppercase leading-none">
                         <span className="text-yellow-500/50 mr-2">LOCATION:</span>
                         <span className="text-white">{e.location_name}</span>
                       </div>
 
-                      {/* Price and Spam Button Row */}
-                      <div className="flex items-center justify-between gap-4 w-full">
-                        <div className="text-[14px] font-black tracking-tighter uppercase leading-none whitespace-nowrap">
+                      <div className="flex items-center justify-between gap-2 md:gap-4 w-full">
+                        <div className="text-[12px] md:text-[14px] font-black tracking-tighter uppercase leading-none whitespace-nowrap">
                           <span className="text-yellow-500/50 mr-2">PRICE:</span>
                           <span className="text-white">{e.price || 'FREE'}</span>
                         </div>
 
                         <button 
                           onClick={() => onVote(e.id, 'spam', 1)} 
-                          className="text-[9px] border border-red-900/40 bg-red-900/10 px-3 py-1.5 text-red-500/60 hover:bg-red-500 hover:text-white transition-all uppercase font-black rounded-sm tracking-widest shrink-0"
+                          className="text-[8px] md:text-[9px] border border-red-900/40 bg-red-900/10 px-2 py-1 md:px-3 md:py-1.5 text-red-500/60 hover:bg-red-500 hover:text-white transition-all uppercase font-black rounded-sm tracking-widest shrink-0"
                         >
                           Report Spam
                         </button>
@@ -116,18 +112,18 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
                     </div>
                   </div>
 
-                  {/* RIGHT COLUMN: Description + Tags */}
-                  <div className="flex-1 flex flex-col w-full pt-2">
-                    <p className="text-neutral-300 text-[16px] mb-12 leading-relaxed whitespace-pre-wrap font-sans">
+                  {/* RIGHT COLUMN: Natural scroll on mobile */}
+                  <div className="flex-1 flex flex-col w-full pt-4 md:pt-2">
+                    <p className="text-neutral-300 text-[14px] md:text-[16px] mb-8 md:mb-12 leading-relaxed whitespace-pre-wrap font-sans">
                       {e.description}
                     </p>
 
                     <div className="space-y-6 mt-auto">
-                      <div className="flex flex-wrap gap-2 pt-8 border-t border-white/5">
+                      <div className="flex flex-wrap gap-2 pt-6 md:pt-8 border-t border-white/5">
                         {sortedTags.map((ft: any) => (
-                          <div key={ft.tags?.name} className="bg-neutral-900 border border-neutral-700 px-3 py-1.5 text-[10px] flex items-center gap-3 rounded-md hover:border-yellow-500/40 transition-all">
+                          <div key={ft.tags?.name} className="bg-neutral-900 border border-neutral-700 px-2 py-1 md:px-3 md:py-1.5 text-[9px] md:text-[10px] flex items-center gap-2 md:gap-3 rounded-md hover:border-yellow-500/40 transition-all">
                             <span className="text-neutral-400 font-bold uppercase">#{ft.tags?.name}</span>
-                            <span className="text-yellow-500 font-black border-l border-white/10 pl-3">{ft.vote_count}</span>
+                            <span className="text-yellow-500 font-black border-l border-white/10 pl-2 md:pl-3">{ft.vote_count}</span>
                             <div className="flex gap-2 ml-1">
                               <button onClick={() => onVote(e.id, ft.tags?.name, 1)} className="hover:text-green-400 text-xs font-bold transition-all transform hover:scale-125">+</button>
                               <button onClick={() => onVote(e.id, ft.tags?.name, -1)} className="hover:text-red-400 text-xs font-bold transition-all transform hover:scale-125">-</button>
@@ -136,7 +132,7 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
                         ))}
                       </div>
 
-                      <div className="relative flex gap-2 max-w-xs pt-4">
+                      <div className="relative flex gap-2 w-full max-w-xs pt-4">
                         <input 
                           className="bg-neutral-900 border border-neutral-800 text-[10px] p-2 outline-none focus:border-yellow-500 w-full uppercase font-bold text-white rounded-sm"
                           placeholder="New Tag..."
