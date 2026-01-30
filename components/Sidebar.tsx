@@ -14,18 +14,33 @@ export function Sidebar({
   const [townInput, setTownInput] = useState("");
   const [textScale, setTextScale] = useState(1.0);
 
-  // PERSISTENCE: Load saved scale on initial mount
+  // PERSISTENCE: Hydrate scale and activeTowns from cache on mount
   useEffect(() => {
     const savedScale = localStorage.getItem("blocal_text_scale");
-    if (savedScale) {
-      setTextScale(parseFloat(savedScale));
-    }
-  }, []);
+    if (savedScale) setTextScale(parseFloat(savedScale));
 
-  // PERSISTENCE: Save scale to cache whenever it changes
+    const savedTowns = localStorage.getItem("blocal_active_towns");
+    if (savedTowns) {
+      try {
+        const parsed = JSON.parse(savedTowns);
+        // Only restore if there is cached data to prevent clearing parent state
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setActiveTowns(parsed);
+        }
+      } catch (e) {
+        console.error("Failed to parse cached LoCALs", e);
+      }
+    }
+  }, [setActiveTowns]);
+
+  // PERSISTENCE: Sync changes to cache (Sidebar stays out of the URL)
   useEffect(() => {
     localStorage.setItem("blocal_text_scale", textScale.toString());
   }, [textScale]);
+
+  useEffect(() => {
+    localStorage.setItem("blocal_active_towns", JSON.stringify(activeTowns));
+  }, [activeTowns]);
 
   const slugify = (text: string) => 
     text.toLowerCase().trim().replace(/[\s_]+/g, "-").replace(/[^\w-+]+/g, "").replace(/--+/g, "-").replace(/^-+|-+$/g, "");
@@ -47,6 +62,7 @@ export function Sidebar({
       
       <div 
         style={{ "--text-scale": textScale } as any}
+        /* FIXED: Dynamic viewport height for mobile stability */
         className={`fixed md:sticky top-0 left-0 z-[80] md:z-0 w-64 h-[100dvh] bg-black border-r border-white/20 p-4 flex flex-col gap-4 font-mono text-white transition-all duration-300 overflow-x-visible ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
       >
         <button onClick={onClose} style={scaled(11)} className="md:hidden self-end text-neutral-500 mb-2 uppercase tracking-widest">Close X</button>
@@ -93,13 +109,15 @@ export function Sidebar({
                   className="absolute left-full top-0 ml-4 w-64 p-4 border border-yellow-600/50 rounded-sm shadow-[20px_20px_50px_rgba(0,0,0,1)] invisible group-hover:visible pointer-events-none transition-all z-[100] transform -translate-x-2 group-hover:translate-x-0"
                 >
                   <div style={{ backgroundColor: '#171717' }} className="absolute left-0 top-2 -ml-[5px] w-2 h-2 border-l border-b border-yellow-600/50 rotate-45" />
+                  {/* UPDATED: Help popup text as requested */}
                   <p style={scaled(11)} className="leading-relaxed text-neutral-200 normal-case font-sans italic">
-                    A <strong className="text-yellow-500 uppercase not-italic">LoCAL</strong> is a collection of events shown in calendar format. A <strong className="text-yellow-500 uppercase not-italic">LoCAL</strong> can be a city, a band, venue, book club, etc.
+                    A <strong className="text-yellow-500 uppercase not-italic">LoCAL</strong> is a calendar to show a collection of events. <strong className="text-yellow-500 uppercase not-italic">LoCAL's</strong> can be useful for bands, for producers or event coordinators, use it how it benefits you.
                   </p>
                 </div>
               </div>
             </div>
             
+            {/* Chips with word-wrapping enabled */}
             <div className="flex flex-wrap gap-1 max-w-full overflow-hidden">
               {activeTowns.map((t: string) => (
                 <span key={t} onClick={() => setActiveTowns(activeTowns.filter((item: string) => item !== t))} 
@@ -112,10 +130,10 @@ export function Sidebar({
           </div>
         </div>
 
-        {/* ANCHORED LINE */}
+        {/* Anchored divider line with no gap below */}
         <div className="w-full border-t-2 border-white/10 mt-2" />
 
-        {/* SECTION: Trending Discovery */}
+        {/* SECTION: Trending Discovery (Above Filters) */}
         <div className={`flex flex-col gap-3 pt-4 w-full overflow-hidden transition-opacity ${!hasLocation && !showAllEvents ? 'opacity-20 pointer-events-none' : ''}`}>
           <button onClick={onTrendingClick} className="group flex items-center gap-2 text-left w-full">
             <span className="w-1.5 h-1.5 bg-red-600 rounded-full mr-2 shadow-[0_0_5px_rgba(220,38,38,0.3)]" /> 
@@ -135,9 +153,9 @@ export function Sidebar({
           </div>
         </div>
 
-        {/* SECTION: Filters */}
+        {/* SECTION: Filters (Flows tightly after Trending) */}
         <div className={`flex flex-col gap-4 w-full overflow-hidden transition-opacity ${!hasLocation && !showAllEvents ? 'opacity-20 pointer-events-none' : ''}`}>
-          <div className="flex justify-between items-center w-full pt-4 border-t border-white/5">
+          <div className="flex justify-between items-center w-full">
             <div style={scaled(11)} className="font-bold text-neutral-500 uppercase tracking-widest">Filters</div>
             <div className="flex border border-neutral-800 rounded overflow-hidden shrink-0">
                 <button onClick={() => setFilterMode('OR')} style={scaled(11)} className={`px-2 py-1 font-bold ${filterMode === 'OR' ? 'bg-yellow-600 text-black' : 'text-neutral-500 hover:text-white'}`}>OR</button>

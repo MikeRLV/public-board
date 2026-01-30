@@ -48,18 +48,8 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
         </div>
         
         <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 md:space-y-12 custom-scrollbar">
-          {/* Post Invitation Section */}
-          <div className="border border-dashed border-yellow-500/30 rounded-lg p-6 bg-yellow-500/5 flex flex-col items-center justify-center gap-3">
-            <p className="text-[10px] text-neutral-400 uppercase tracking-widest font-bold text-center">
-              {dayjs(activeDay).isBefore(dayjs().startOf('day')) ? "Past days cannot be updated" : "Know of something else happening on this day?"}
-            </p>
-            {dayjs(activeDay).isSameOrAfter(dayjs().startOf('day')) && (
-              <button onClick={() => { onClose(); onPostClick(activeDay); }} className="bg-yellow-600 text-black px-8 py-2 rounded-full font-bold text-xs uppercase shadow-lg transition-all hover:bg-yellow-500 active:scale-95">
-                + Post Flyer
-              </button>
-            )}
-          </div>
-
+          
+          {/* SECTION: Events now render at the top */}
           {dayEvents.map((e: any) => {
             const sortedTags = [...(e.flyer_tags || [])].sort((a, b) => (b.vote_count || 0) - (a.vote_count || 0));
             
@@ -67,7 +57,7 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
               <div key={e.id} className="bg-black/40 rounded-lg border border-white/5 p-4 md:p-12 shadow-2xl">
                 <div className="flex flex-col md:flex-row gap-8 md:gap-12 items-start">
                   
-                  {/* LEFT COLUMN: md:sticky keeps it pinned on desktop only */}
+                  {/* LEFT COLUMN: md:sticky for desktop stability only */}
                   <div className="w-full md:w-2/5 md:sticky md:top-0 self-start pt-2">
                     <div className="relative group flex items-center justify-center mb-6 md:mb-10">
                       <div className="absolute -inset-3 border border-white/10 rounded-sm pointer-events-none group-hover:border-yellow-500/20 transition-colors hidden md:block" />
@@ -112,7 +102,7 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
                     </div>
                   </div>
 
-                  {/* RIGHT COLUMN: Natural scroll on mobile */}
+                  {/* RIGHT COLUMN: Natural stacking flow on mobile */}
                   <div className="flex-1 flex flex-col w-full pt-4 md:pt-2">
                     <p className="text-neutral-300 text-[14px] md:text-[16px] mb-8 md:mb-12 leading-relaxed whitespace-pre-wrap font-sans">
                       {e.description}
@@ -150,6 +140,19 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
               </div>
             );
           })}
+
+          {/* SECTION: Post Invitation now at the bottom */}
+          <div className="border border-dashed border-yellow-500/30 rounded-lg p-6 bg-yellow-500/5 flex flex-col items-center justify-center gap-3">
+            <p className="text-[10px] text-neutral-400 uppercase tracking-widest font-bold text-center">
+              {dayjs(activeDay).isBefore(dayjs().startOf('day')) ? "Past days cannot be updated" : "Know of something else happening on this day?"}
+            </p>
+            {dayjs(activeDay).isSameOrAfter(dayjs().startOf('day')) && (
+              <button onClick={() => { onClose(); onPostClick(activeDay); }} className="bg-yellow-600 text-black px-8 py-2 rounded-full font-bold text-xs uppercase shadow-lg transition-all hover:bg-yellow-500 active:scale-95">
+                + Post Flyer
+              </button>
+            )}
+          </div>
+
         </div>
       </div>
     </div>

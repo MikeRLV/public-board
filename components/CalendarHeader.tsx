@@ -45,7 +45,6 @@ export function CalendarHeader({ currentDate, setCurrentDate, activeTowns = [], 
         </button>
         
         <div className="relative flex flex-col items-center text-center" ref={pickerRef}>
-          {/* FIX: Changed from <button> to <div> to prevent hydration error (button-in-button) */}
           <div className="flex flex-col items-center gap-1">
             <button 
               onClick={() => setIsPickerOpen(!isPickerOpen)}
@@ -54,13 +53,13 @@ export function CalendarHeader({ currentDate, setCurrentDate, activeTowns = [], 
               {currentDate.format("MMM YYYY")}
             </button>
             
-            {/* Merged Town Labels Section */}
+            {/* Merged Town Labels Section - Updated to White Text */}
             <div className="flex flex-wrap justify-center gap-x-2 h-3">
               {activeTowns.length > 0 ? (
                 activeTowns.map((town: string, index: number) => (
-                  <span key={town} className="text-[9px] text-neutral-600 uppercase tracking-widest whitespace-nowrap font-bold">
+                  <span key={town} className="text-[9px] text-white uppercase tracking-widest whitespace-nowrap font-bold">
                     {town.replace(/-/g, " ")}
-                    {index < activeTowns.length - 1 && <span className="ml-2 text-neutral-800">•</span>}
+                    {index < activeTowns.length - 1 && <span className="ml-2 text-neutral-700">•</span>}
                   </span>
                 ))
               ) : (
@@ -122,10 +121,10 @@ export function CalendarHeader({ currentDate, setCurrentDate, activeTowns = [], 
         </button>
       </div>
 
-      {/* 3. RIGHT: Sync Indicator */}
+      {/* 3. RIGHT: Branding - Updated to LoCAL Bull and hidden on mobile */}
       <div className="flex justify-end pr-2">
-        <div className="text-[8px] text-neutral-800 font-black uppercase tracking-widest vertical-rl rotate-180">
-          LoCAL Bull V2.6
+        <div className="text-[8px] text-neutral-800 font-black uppercase tracking-widest vertical-rl rotate-180 hidden md:block">
+          LoCAL Bull
         </div>
       </div>
     </div>
