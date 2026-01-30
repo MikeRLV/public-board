@@ -34,13 +34,12 @@ export function Sidebar({
       
       <div 
         style={{ "--text-scale": textScale } as any}
-        /* FIXED: Changed h-screen to h-[100dvh] for mobile viewport stability */
+        /* Mobile viewport stability fix */
         className={`fixed md:sticky top-0 left-0 z-[80] md:z-0 w-64 h-[100dvh] bg-black border-r border-white/20 p-4 flex flex-col gap-4 font-mono text-white transition-all duration-300 overflow-x-visible ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
       >
         <button onClick={onClose} style={scaled(11)} className="md:hidden self-end text-neutral-500 mb-2 uppercase tracking-widest">Close X</button>
         
         <div className="space-y-4 w-full max-w-full shrink-0">
-          {/* Main Branding Header */}
           <h1 style={scaled(22)} className="font-bold text-yellow-500 tracking-tighter leading-none whitespace-nowrap">
             B L<span className="lowercase">o</span>CAL
           </h1>
@@ -51,6 +50,15 @@ export function Sidebar({
 
           {/* SECTION: LoCALs Management */}
           <div className="space-y-3 pt-6 w-full">
+            <button onClick={onBucketClick} className="group flex items-center gap-2 text-left w-full p-1 border-t border-white/5 pt-3">
+              <div className="flex items-center">
+                <span className="w-1.5 h-1.5 bg-yellow-600 rounded-full inline-block mr-2 shadow-[0_0_5px_rgba(202,138,4,0.3)]" /> 
+                <span style={scaled(11)} className="font-bold text-yellow-500/50 tracking-[0.3em] group-hover:text-yellow-500 transition-colors">
+                    LoCALs
+                </span>
+              </div>
+            </button>
+
             <div className="flex items-center gap-2 w-full">
               <input 
                 style={scaled(13)}
@@ -79,16 +87,8 @@ export function Sidebar({
                 </div>
               </div>
             </div>
-
-            <button onClick={onBucketClick} className="group flex items-center gap-2 text-left w-full p-1 border-t border-white/5 pt-3">
-              <div className="flex items-center">
-                <span className="w-1.5 h-1.5 bg-yellow-600 rounded-full inline-block mr-2 shadow-[0_0_5px_rgba(202,138,4,0.3)]" /> 
-                <span style={scaled(11)} className="font-bold text-yellow-500/50 tracking-[0.3em] group-hover:text-yellow-500 transition-colors">
-                    LoCALs
-                </span>
-              </div>
-            </button>
             
+            {/* UPDATED: flex-wrap enabled for "word wrap" */}
             <div className="flex flex-wrap gap-1 max-w-full overflow-hidden">
               {activeTowns.map((t: string) => (
                 <span key={t} onClick={() => setActiveTowns(activeTowns.filter((item: string) => item !== t))} 
@@ -101,12 +101,32 @@ export function Sidebar({
           </div>
         </div>
 
-        {/* REQUESTED DIVIDER: Line first, then a Gap (mt-10) before Filters */}
-        <div className="w-full border-t-2 border-white/10 mt-6" />
+        {/* Divider line */}
+        <div className="w-full border-t-2 border-white/10 mt-2" />
+
+        {/* SECTION: Trending Discovery (Above Filters) */}
+        <div className={`flex flex-col gap-3 pt-4 w-full overflow-hidden transition-opacity ${!hasLocation && !showAllEvents ? 'opacity-20 pointer-events-none' : ''}`}>
+          <button onClick={onTrendingClick} className="group flex items-center gap-2 text-left w-full">
+            <span className="w-1.5 h-1.5 bg-red-600 rounded-full mr-2 shadow-[0_0_5px_rgba(220,38,38,0.3)]" /> 
+            <span style={scaled(11)} className="font-bold text-yellow-500/50 uppercase tracking-[0.3em] group-hover:text-yellow-500 transition-colors">Trending</span>
+          </button>
+          <div className="flex flex-col gap-1 w-full overflow-hidden">
+            {trendingTags?.slice(0, 5).map((tag: any) => (
+              <button 
+                key={tag.name} 
+                onClick={() => { if (!activeTags.includes(tag.name)) setActiveTags([...activeTags, tag.name]); }} 
+                className="flex justify-between items-center group py-1 border-b border-white/[0.03] last:border-0 hover:bg-white/5 px-1 rounded transition-colors text-left w-full overflow-hidden"
+              >
+                <span style={scaled(12)} className="font-bold text-neutral-400 group-hover:text-white uppercase transition-colors truncate">#{tag.name}</span>
+                <span style={scaled(10)} className="text-neutral-600 group-hover:text-yellow-500 transition-colors shrink-0">+{tag.weight}</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* SECTION: Filters */}
-        <div className={`flex flex-col gap-4 mt-10 w-full overflow-hidden transition-opacity ${!hasLocation && !showAllEvents ? 'opacity-20 pointer-events-none' : ''}`}>
-          <div className="flex justify-between items-center w-full">
+        <div className={`flex flex-col gap-4 w-full overflow-hidden transition-opacity ${!hasLocation && !showAllEvents ? 'opacity-20 pointer-events-none' : ''}`}>
+          <div className="flex justify-between items-center w-full pt-4 border-t border-white/5">
             <div style={scaled(11)} className="font-bold text-neutral-500 uppercase tracking-widest">Filters</div>
             <div className="flex border border-neutral-800 rounded overflow-hidden shrink-0">
                 <button onClick={() => setFilterMode('OR')} style={scaled(11)} className={`px-2 py-1 font-bold ${filterMode === 'OR' ? 'bg-yellow-600 text-black' : 'text-neutral-500 hover:text-white'}`}>OR</button>
@@ -129,27 +149,7 @@ export function Sidebar({
               }} 
             />
 
-            {/* Trending section under the tag input */}
-            <div className="flex flex-col gap-3 py-2">
-              <button onClick={onTrendingClick} className="group flex items-center gap-2 text-left w-full">
-                <span className="w-1.5 h-1.5 bg-red-600 rounded-full mr-2 shadow-[0_0_5px_rgba(220,38,38,0.3)]" /> 
-                <span style={scaled(11)} className="font-bold text-yellow-500/50 uppercase tracking-[0.3em] group-hover:text-yellow-500 transition-colors">Trending</span>
-              </button>
-              <div className="flex flex-col gap-1 w-full overflow-hidden">
-                {trendingTags?.slice(0, 5).map((tag: any) => (
-                  <button 
-                    key={tag.name} 
-                    onClick={() => { if (!activeTags.includes(tag.name)) setActiveTags([...activeTags, tag.name]); }} 
-                    className="flex justify-between items-center group py-1 border-b border-white/[0.03] last:border-0 hover:bg-white/5 px-1 rounded transition-colors text-left w-full overflow-hidden"
-                  >
-                    <span style={scaled(12)} className="font-bold text-neutral-400 group-hover:text-white uppercase transition-colors truncate">#{tag.name}</span>
-                    <span style={scaled(10)} className="text-neutral-600 group-hover:text-yellow-500 transition-colors shrink-0">+{tag.weight}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Removable chips for active tags */}
+            {/* UPDATED: flex-wrap enabled for tag chips */}
             <div className="flex flex-wrap gap-1 max-w-full overflow-hidden pt-1">
               {activeTags.map((tag: string) => (
                 <span 
@@ -169,15 +169,15 @@ export function Sidebar({
         <div className="flex flex-col gap-3 border-t border-white/5 pt-4 mt-auto w-full overflow-hidden">
            <div className="flex flex-wrap gap-4 px-1 pb-1">
               <button className="flex items-center gap-2 group" onClick={() => setShowAllAges(!showAllAges)}>
-                 <div className={`w-3 h-3 border shrink-0 transition-all ${showAllAges ? 'bg-emerald-600 border-emerald-600' : 'border-neutral-700'}`} />
+                 <div className={`w-3 h-3 border shrink-0 transition-all ${showAllAges ? 'bg-emerald-600 border-emerald-600 shadow-sm' : 'border-neutral-700'}`} />
                  <span style={scaled(10)} className="font-bold uppercase whitespace-nowrap">All Ages</span>
               </button>
               <button className="flex items-center gap-2 group" onClick={() => setShow18(!show18)}>
-                 <div className={`w-3 h-3 border shrink-0 transition-all ${show18 ? 'bg-yellow-600 border-yellow-600' : 'border-neutral-700'}`} />
+                 <div className={`w-3 h-3 border shrink-0 transition-all ${show18 ? 'bg-yellow-600 border-yellow-600 shadow-sm' : 'border-neutral-700'}`} />
                  <span style={scaled(10)} className="font-bold uppercase whitespace-nowrap">18+</span>
               </button>
               <button className="flex items-center gap-2 group" onClick={() => setShow21(!show21)}>
-                 <div className={`w-3 h-3 border shrink-0 transition-all ${show21 ? 'bg-red-600 border-red-600' : 'border-neutral-700'}`} />
+                 <div className={`w-3 h-3 border shrink-0 transition-all ${show21 ? 'bg-red-600 border-red-600 shadow-sm' : 'border-neutral-700'}`} />
                  <span style={scaled(10)} className="font-bold uppercase whitespace-nowrap">21+</span>
               </button>
            </div>
