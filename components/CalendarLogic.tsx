@@ -25,8 +25,9 @@ export function CalendarLogic({ city }: { city: string }) {
   const [isBucketModalOpen, setIsBucketModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
+  // All shared state comes from this hook
   const {
-    userId, filteredEvents, weightedTags, weightedLocals, // Integrated separate LoCAL pool
+    userId, filteredEvents, weightedTags, weightedLocals, 
     savedLocations, activeTags, setActiveTags,
     activeTowns, setActiveTowns, filterMode, setFilterMode, showAllEvents, setShowAllEvents,
     showSpam, setShowSpam, showAllAges, setShowAllAges, show18, setShow18, show21, setShow21, 
@@ -117,17 +118,20 @@ export function CalendarLogic({ city }: { city: string }) {
       />
       
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
+        {/* FIX: Ensure all shared state props are passed here */}
         <CalendarHeader 
           currentDate={currentDate} 
           setCurrentDate={setCurrentDate} 
           activeTowns={activeTowns} 
           setActiveTowns={setActiveTowns} 
           onMenuClick={() => setIsSidebarOpen(true)} 
+          activeTags={activeTags} 
+          setActiveTags={setActiveTags}
         />
         
         {activeTowns.length === 0 && !city ? (
           <div className="flex-1 flex flex-col items-center justify-center p-10 text-center bg-neutral-900/20">
-            <h2 className="text-4xl font-black text-yellow-500 uppercase tracking-tighter leading-none">No LoCAL Selected</h2>
+            <h2 className="text-4xl font-black text-[var(--primary)] uppercase tracking-tighter leading-none">No LoCAL Selected</h2>
           </div>
         ) : (
           <CalendarGrid 
@@ -160,7 +164,7 @@ export function CalendarLogic({ city }: { city: string }) {
           isUploading={isUploading} 
           todayStr={todayStr} 
           weightedTags={weightedTags} 
-          weightedLocals={weightedLocals} // Passed the separate LoCAL suggestion pool
+          weightedLocals={weightedLocals} 
         />
         
         <TrendingModal 

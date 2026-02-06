@@ -1,26 +1,30 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* globals.css */
+
+/* 1. Classic LoCAL (Yellow/Black) */
+:root, [data-theme='default'] {
+  --bg-main: #000000;
+  --primary: #eab308; /* yellow-500 */
+  --border-color: rgba(255, 255, 255, 0.1);
+  --text-main: #ffffff;
+  --text-muted: #737373;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* 2. Cyberpunk (Pink/Cyan) */
+[data-theme='cyberpunk'] {
+  --bg-main: #0a000a;
+  --primary: #ec4899; /* pink-500 */
+  --border-color: rgba(0, 255, 255, 0.2);
+  --text-main: #00ffff; /* cyan-400 */
+  --text-muted: #6366f1;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* 3. NEW Minimalist (Mono Dark) */
+[data-theme='minimalist'] {
+  --bg-main: #0a0a0a;       /* Deep charcoal, not pure black */
+  --primary: #ffffff;       /* Pure white accents */
+  --border-color: rgba(255, 255, 255, 0.08);
+  --text-main: #ededed;     /* Off-white for less glare */
+  --text-muted: #525252;     /* Medium gray */
 }

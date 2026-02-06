@@ -28,10 +28,10 @@ export function EventPost({ city }: { city: string }) {
     setIsSaving(true);
 
     try {
-      // Direct Database Insert (No Storage/Images needed)
+      // Direct Database Insert
       const { error } = await supabase.from("flyers").insert({
         city_slug: city,
-        location_name: title,           // We use this as the Event Title
+        location_name: title,           // Using this as the Event Title
         event_start: new Date(eventDate).toISOString(),
         image_url: null                 // Explicitly null
       });
@@ -53,54 +53,77 @@ export function EventPost({ city }: { city: string }) {
 
   return (
     <>
+      {/* TRIGGER BUTTON: Themed to match sidebar/header buttons */}
       <button
         onClick={() => setIsOpen(true)}
-        className="bg-white text-black px-4 py-2 font-bold uppercase text-sm hover:bg-neutral-200 transition rounded-sm"
+        style={{ backgroundColor: 'var(--primary)', color: 'var(--bg-main)' }}
+        className="px-4 py-2 font-bold uppercase text-sm hover:opacity-80 transition-all rounded-sm shadow-lg active:scale-95"
       >
         + Add Event
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-neutral-900 border border-neutral-700 p-6 rounded-lg max-w-md w-full relative">
+        <div 
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[130] p-4 transition-all"
+          onClick={() => setIsOpen(false)} // Close on overlay click
+        >
+          {/* MODAL CONTAINER: Using theme BG and Border variables */}
+          <div 
+            style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)' }}
+            className="border p-6 rounded-lg max-w-md w-full relative shadow-[0_0_50px_rgba(0,0,0,0.5)] transition-colors duration-300"
+            onClick={e => e.stopPropagation()} // Prevent closing when clicking inside
+          >
             <button
               onClick={() => setIsOpen(false)}
-              className="absolute top-4 right-4 text-neutral-400 hover:text-white"
+              className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors"
             >
               ✕
             </button>
-            <h2 className="text-xl font-bold mb-4 text-white">Add to Calendar</h2>
+
+            <h2 style={{ color: 'var(--primary)' }} className="text-xl font-black uppercase tracking-tighter mb-4">
+              Add to Calendar
+            </h2>
+
             <div className="space-y-4">
-              
               {/* TITLE INPUT */}
               <div>
-                <label className="block text-sm text-neutral-400 mb-1">Event Title</label>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] mb-1">
+                  Event Title
+                </label>
                 <input
                   type="text"
                   placeholder="e.g. 8pm Jazz at The Dive"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full bg-neutral-800 text-white p-2 rounded border border-neutral-700 focus:border-yellow-500 outline-none"
+                  style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)' }}
+                  className="w-full text-[var(--text-main)] p-2 rounded border focus:border-[var(--primary)] outline-none transition-colors placeholder:text-neutral-700"
                   autoFocus
                 />
               </div>
 
               {/* DATE INPUT */}
               <div>
-                <label className="block text-sm text-neutral-400 mb-1">Date & Time</label>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] mb-1">
+                  Date & Time
+                </label>
                 <input
                   type="datetime-local"
                   value={eventDate}
                   onChange={(e) => setEventDate(e.target.value)}
-                  className="w-full bg-neutral-800 text-white p-2 rounded border border-neutral-700 color-scheme-dark"
+                  style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)' }}
+                  className="w-full text-[var(--text-main)] p-2 rounded border focus:border-[var(--primary)] outline-none transition-colors color-scheme-dark"
                 />
               </div>
 
-              {/* SAVE BUTTON */}
+              {/* SAVE BUTTON: High contrast themed button */}
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="w-full bg-yellow-500 text-black font-bold py-3 rounded mt-4 hover:bg-yellow-400 disabled:opacity-50"
+                style={{ 
+                  backgroundColor: isSaving ? 'var(--text-muted)' : 'var(--primary)', 
+                  color: 'var(--bg-main)' 
+                }}
+                className="w-full font-black py-3 rounded mt-4 hover:opacity-90 disabled:opacity-50 transition-all uppercase tracking-widest text-sm"
               >
                 {isSaving ? "Saving..." : "POST EVENT"}
               </button>

@@ -1,7 +1,10 @@
 "use client";
 import { useEffect, useState, useMemo, useRef } from "react";
+import dayjs from "dayjs";
+import localeData from "dayjs/plugin/localeData";
+import { useSidebarLogic } from "../hooks/useSidebarLogic";
 
-// Added weightedLocals as a separate pool
+// Preserve existing suggestion logic and tag syncing
 export function PostEventModal({ 
   isOpen, onClose, formState, setFormState, onSave, isUploading, todayStr, 
   weightedTags = [], weightedLocals = [] 
@@ -11,7 +14,25 @@ export function PostEventModal({
   const tagInputRef = useRef<HTMLInputElement>(null);
   const townInputRef = useRef<HTMLInputElement>(null);
 
-  // --- LoCAL Suggestions Logic (Using the LoCAL-specific pool) ---
+  // Sync logic to ensure modal respects the Theme Lab cache immediately
+  useEffect(() => {
+    if (typeof window !== "undefined" && isOpen) {
+      const savedTheme = localStorage.getItem("local-bull-custom-theme");
+      if (savedTheme) {
+        const colors = JSON.parse(savedTheme);
+        const root = document.documentElement;
+        if (root.getAttribute('data-theme') === 'custom') {
+          root.style.setProperty('--bg-main', colors.bg);
+          root.style.setProperty('--primary', colors.primary);
+          root.style.setProperty('--border-color', colors.border);
+          root.style.setProperty('--text-main', colors.text);
+          root.style.setProperty('--text-muted', colors.muted);
+        }
+      }
+    }
+  }, [isOpen]);
+
+  // --- LoCAL Suggestions Logic ---
   const currentTownWord = useMemo(() => {
     const parts = (formState.town || "").split(",");
     return parts[parts.length - 1].trim().toLowerCase();
@@ -19,7 +40,6 @@ export function PostEventModal({
 
   const townSuggestions = useMemo(() => {
     if (!currentTownWord || currentTownWord.length < 1) return [];
-    // Filters from weightedLocals instead of weightedTags
     return weightedLocals
       .filter((t: any) => t.name.toLowerCase().startsWith(currentTownWord))
       .sort((a: any, b: any) => (b.weight || 0) - (a.weight || 0))
@@ -30,13 +50,12 @@ export function PostEventModal({
     const parts = (formState.town || "").split(",");
     parts[parts.length - 1] = ` ${townName}`;
     const finalTowns = parts.join(",").replace(/^,/, "").trim();
-    // Populates with a comma and space for the next entry
     setFormState({ ...formState, town: finalTowns + ", " }); 
     setTownSuggestionIdx(-1);
     townInputRef.current?.focus();
   };
 
-  // --- Tag Suggestions Logic (Using the descriptive pool) ---
+  // --- Tag Suggestions Logic ---
   const currentWord = useMemo(() => {
     const parts = (formState.tags || "").split(",");
     return parts[parts.length - 1].trim().toLowerCase();
@@ -59,7 +78,6 @@ export function PostEventModal({
     tagInputRef.current?.focus();
   };
 
-  // --- Keyboard & Sync Logic remains identical to preserve functionality ---
   const handleKeyDown = (e: React.KeyboardEvent, type: 'tag' | 'town') => {
     const currentSuggestions = type === 'tag' ? suggestions : townSuggestions;
     const currentIdx = type === 'tag' ? suggestionIdx : townSuggestionIdx;
@@ -81,6 +99,7 @@ export function PostEventModal({
     }
   };
 
+  // Auto-sync Tags based on Price and Age Checks
   useEffect(() => {
     let currentTags = (formState.tags || "").split(',').map((t: string) => t.trim()).filter((t: string) => t !== "");
     let changed = false;
@@ -102,88 +121,151 @@ export function PostEventModal({
 
   return (
     <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/95 p-4 overflow-y-auto font-mono" onClick={onClose}>
-      <div className="bg-neutral-900 w-full max-w-lg border border-yellow-600/50 rounded-xl p-8 flex flex-col my-auto relative shadow-2xl" onClick={e => e.stopPropagation()}>
-        <h2 className="text-2xl font-bold text-yellow-500 mb-6 uppercase tracking-tighter leading-none">Post Event</h2>
+      <div 
+        style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)' }}
+        className="w-full max-w-lg border rounded-xl p-8 flex flex-col my-auto relative shadow-2xl transition-colors duration-300" 
+        onClick={e => e.stopPropagation()}
+      >
+        <h2 style={{ color: 'var(--primary)' }} className="text-2xl font-bold mb-6 uppercase tracking-tighter leading-none">
+          Post Event
+        </h2>
         
         <div className="space-y-4">
-          <input type="date" min={todayStr} className="w-full bg-black border border-neutral-700 p-3 text-white text-xs" value={formState.date || ""} onChange={e => setFormState({ ...formState, date: e.target.value })} />
-          <input className="w-full bg-black border border-neutral-700 p-3 text-white text-xs uppercase font-black" placeholder="EVENT TITLE" value={formState.title || ""} onChange={e => setFormState({ ...formState, title: e.target.value })} />
+          <input 
+            type="date" min={todayStr} 
+            style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)' }}
+            className="w-full border p-3 text-[var(--text-main)] text-xs color-scheme-dark focus:border-[var(--primary)] outline-none" 
+            value={formState.date || ""} onChange={e => setFormState({ ...formState, date: e.target.value })} 
+          />
+          
+          <input 
+            style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)' }}
+            className="w-full border p-3 text-[var(--text-main)] text-xs uppercase font-black focus:border-[var(--primary)] outline-none" 
+            placeholder="EVENT TITLE" value={formState.title || ""} onChange={e => setFormState({ ...formState, title: e.target.value })} 
+          />
           
           <div className="relative">
             <input 
               ref={townInputRef}
-              className="w-full bg-black border border-neutral-700 p-3 text-white text-[11px]" 
+              style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)' }}
+              className="w-full border p-3 text-[var(--text-main)] text-[11px] focus:border-[var(--primary)] outline-none" 
               placeholder="LoCAL(s) [comma separated]" 
               value={formState.town || ""} 
               onChange={e => setFormState({ ...formState, town: e.target.value })} 
               onKeyDown={(e) => handleKeyDown(e, 'town')}
             />
             {townSuggestions.length > 0 && (
-              <div className="absolute left-0 right-0 bottom-full mb-1 bg-neutral-800 border border-neutral-700 rounded-sm shadow-2xl z-20 flex flex-col overflow-hidden">
+              <div className="absolute left-0 right-0 bottom-full mb-1 bg-neutral-900 border border-[var(--border-color)] rounded-sm shadow-2xl z-20 flex flex-col overflow-hidden">
                 {townSuggestions.map((tag: any, i: number) => (
-                  <button key={tag.name} onClick={() => handleSelectTown(tag.name)} onMouseEnter={() => setTownSuggestionIdx(i)} className={`w-full text-left px-3 py-2 text-[10px] font-bold uppercase border-b border-white/5 last:border-0 transition-colors flex justify-between items-center ${townSuggestionIdx === i ? "bg-yellow-600 text-black" : "hover:bg-yellow-600/20 text-neutral-300"}`}>
+                  <button 
+                    key={tag.name} 
+                    onClick={() => handleSelectTown(tag.name)} 
+                    onMouseEnter={() => setTownSuggestionIdx(i)} 
+                    className={`w-full text-left px-3 py-2 text-[10px] font-bold uppercase border-b border-white/5 last:border-0 transition-colors flex justify-between items-center ${townSuggestionIdx === i ? "bg-[var(--primary)] text-[var(--bg-main)]" : "hover:bg-white/5 text-[var(--text-muted)]"}`}
+                  >
                     <span>{tag.name}</span>
-                    <span className={`font-mono text-[8px] ${townSuggestionIdx === i ? "text-black/50" : "text-neutral-500"}`}>+{tag.weight}</span>
+                    <span className={`font-mono text-[8px] ${townSuggestionIdx === i ? "opacity-50" : "text-[var(--text-muted)]"}`}>+{tag.weight}</span>
                   </button>
                 ))}
               </div>
             )}
           </div>
 
-          <input className="w-full bg-black border border-neutral-700 p-3 text-white text-xs" placeholder="VENUE NAME" value={formState.place || ""} onChange={e => setFormState({ ...formState, place: e.target.value })} />
-          <input className="w-full bg-black border border-neutral-700 p-3 text-white text-xs" placeholder="PRICE" value={formState.price || ""} onChange={e => setFormState({ ...formState, price: e.target.value })} />
+          <input 
+            style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)' }}
+            className="w-full border p-3 text-[var(--text-main)] text-xs focus:border-[var(--primary)] outline-none" 
+            placeholder="VENUE NAME" value={formState.place || ""} onChange={e => setFormState({ ...formState, place: e.target.value })} 
+          />
           
+          <input 
+            style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)' }}
+            className="w-full border p-3 text-[var(--text-main)] text-xs focus:border-[var(--primary)] outline-none" 
+            placeholder="PRICE" value={formState.price || ""} onChange={e => setFormState({ ...formState, price: e.target.value })} 
+          />
+          
+          {/* Age Restriction Checkboxes */}
           <div className="flex flex-wrap gap-4 py-2 px-1">
-            <label className="flex items-center gap-2 cursor-pointer group">
-              <input type="checkbox" className="hidden" checked={!!formState.isAllAges} onChange={e => setFormState({...formState, isAllAges: e.target.checked})} />
-              <div className={`w-4 h-4 border transition-all ${formState.isAllAges ? 'bg-emerald-600 border-emerald-600' : 'border-neutral-700'}`} />
-              <span className={`text-[10px] font-bold uppercase transition-colors ${formState.isAllAges ? 'text-emerald-500' : 'text-neutral-500 group-hover:text-neutral-300'}`}>All Ages</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer group">
-              <input type="checkbox" className="hidden" checked={!!formState.is18Plus} onChange={e => setFormState({...formState, is18Plus: e.target.checked})} />
-              <div className={`w-4 h-4 border transition-all ${formState.is18Plus ? 'bg-yellow-600 border-yellow-600' : 'border-neutral-700'}`} />
-              <span className={`text-[10px] font-bold uppercase transition-colors ${formState.is18Plus ? 'text-yellow-500' : 'text-neutral-500 group-hover:text-neutral-300'}`}>18+ Only</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer group">
-              <input type="checkbox" className="hidden" checked={!!formState.is21Plus} onChange={e => setFormState({...formState, is21Plus: e.target.checked})} />
-              <div className={`w-4 h-4 border transition-all ${formState.is21Plus ? 'bg-red-600 border-red-600' : 'border-neutral-700'}`} />
-              <span className={`text-[10px] font-bold uppercase transition-colors ${formState.is21Plus ? 'text-red-500' : 'text-neutral-500 group-hover:text-neutral-300'}`}>21+ Only</span>
-            </label>
+            {[
+              { id: 'isAllAges', label: 'All Ages', color: 'bg-emerald-600' },
+              { id: 'is18Plus', label: '18+ Only', color: 'bg-yellow-600' },
+              { id: 'is21Plus', label: '21+ Only', color: 'bg-red-600' }
+            ].map((age) => (
+              <label key={age.id} className="flex items-center gap-2 cursor-pointer group">
+                <input type="checkbox" className="hidden" checked={!!formState[age.id]} onChange={e => setFormState({...formState, [age.id]: e.target.checked})} />
+                <div 
+                  style={{ borderColor: formState[age.id] ? 'transparent' : 'var(--border-color)' }}
+                  className={`w-4 h-4 border transition-all ${formState[age.id] ? age.color : ''}`} 
+                />
+                <span className={`text-[10px] font-bold uppercase transition-colors ${formState[age.id] ? 'text-[var(--text-main)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text-main)]'}`}>
+                  {age.label}
+                </span>
+              </label>
+            ))}
           </div>
 
           <div className="relative">
             <input 
               ref={tagInputRef}
-              className="w-full bg-black border border-neutral-700 p-3 text-white text-xs font-mono" 
+              style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)' }}
+              className="w-full border p-3 text-[var(--text-main)] text-xs font-mono focus:border-[var(--primary)] outline-none" 
               placeholder="TAG(s) [comma separated]" 
               value={formState.tags || ""} 
               onChange={e => setFormState({ ...formState, tags: e.target.value })} 
               onKeyDown={(e) => handleKeyDown(e, 'tag')}
             />
             {suggestions.length > 0 && (
-              <div className="absolute left-0 right-0 bottom-full mb-1 bg-neutral-800 border border-neutral-700 rounded-sm shadow-2xl z-20 flex flex-col overflow-hidden">
+              <div className="absolute left-0 right-0 bottom-full mb-1 bg-neutral-900 border border-[var(--border-color)] rounded-sm shadow-2xl z-20 flex flex-col overflow-hidden">
                 {suggestions.map((tag: any, i: number) => (
-                  <button key={tag.name} onClick={() => handleSelectTag(tag.name)} onMouseEnter={() => setSuggestionIdx(i)} className={`w-full text-left px-3 py-2 text-[10px] font-bold uppercase border-b border-white/5 last:border-0 transition-colors flex justify-between items-center ${suggestionIdx === i ? "bg-yellow-600 text-black" : "hover:bg-yellow-600/20 text-neutral-300"}`}>
+                  <button 
+                    key={tag.name} 
+                    onClick={() => handleSelectTag(tag.name)} 
+                    onMouseEnter={() => setSuggestionIdx(i)} 
+                    className={`w-full text-left px-3 py-2 text-[10px] font-bold uppercase border-b border-white/5 last:border-0 transition-colors flex justify-between items-center ${suggestionIdx === i ? "bg-[var(--primary)] text-[var(--bg-main)]" : "hover:bg-white/5 text-[var(--text-muted)]"}`}
+                  >
                     <span>#{tag.name}</span>
-                    <span className={`font-mono text-[8px] ${suggestionIdx === i ? "text-black/50" : "text-neutral-500"}`}>+{tag.weight}</span>
+                    <span className={`font-mono text-[8px] ${suggestionIdx === i ? "opacity-50" : "text-[var(--text-muted)]"}`}>+{tag.weight}</span>
                   </button>
                 ))}
               </div>
             )}
           </div>
 
-          <textarea className="w-full bg-black border border-neutral-700 p-3 text-white h-24 text-xs font-mono resize-none" placeholder="DESCRIPTION / DETAILS..." value={formState.desc || ""} onChange={e => setFormState({ ...formState, desc: e.target.value })} />
+          <textarea 
+            style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)' }}
+            className="w-full border p-3 text-[var(--text-main)] h-24 text-xs font-mono resize-none focus:border-[var(--primary)] outline-none" 
+            placeholder="DESCRIPTION / DETAILS..." value={formState.desc || ""} onChange={e => setFormState({ ...formState, desc: e.target.value })} 
+          />
           
-          <div className="relative border border-neutral-700 bg-black p-3 rounded-sm flex items-center justify-between group">
+          {/* Browse Section */}
+          <div style={{ borderColor: 'var(--border-color)' }} className="relative border bg-black/20 p-3 rounded-sm flex items-center justify-between group">
             <input type="file" accept=".jpg,.jpeg,.png" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={e => setFormState({ ...formState, image: e.target.files?.[0] || null })} />
-            <span className="text-[10px] text-neutral-400 truncate uppercase">{formState.image ? formState.image.name : "SELECT FLYER IMAGE"}</span>
-            <div className="bg-yellow-600 text-black px-2 py-1 text-[9px] font-bold uppercase group-hover:bg-yellow-500 transition-colors">Browse</div>
+            <span className="text-[10px] text-[var(--text-muted)] truncate uppercase">{formState.image ? formState.image.name : "SELECT FLYER IMAGE"}</span>
+            <div 
+              style={{ backgroundColor: 'var(--primary)', color: 'var(--bg-main)' }}
+              className="px-2 py-1 text-[9px] font-bold uppercase transition-opacity hover:opacity-80"
+            >
+              Browse
+            </div>
           </div>
         </div>
 
+        {/* Footer Actions */}
         <div className="flex gap-4 mt-8">
-          <button onClick={onClose} className="flex-1 py-3 text-xs font-bold border border-neutral-700 uppercase hover:bg-white/5 transition-colors">Cancel</button>
-          <button onClick={onSave} disabled={isUploading || !formState.town} className="flex-1 py-3 text-xs font-bold uppercase bg-yellow-600 text-black disabled:opacity-50 active:scale-95 transition-all">
+          <button 
+            onClick={onClose} 
+            className="flex-1 py-3 text-xs font-bold border border-[var(--border-color)] text-[var(--text-main)] uppercase hover:bg-white/5 transition-colors"
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={onSave} 
+            disabled={isUploading || !formState.town} 
+            style={{ 
+              backgroundColor: isUploading ? 'var(--text-muted)' : 'var(--primary)', 
+              color: 'var(--bg-main)' 
+            }}
+            className="flex-1 py-3 text-xs font-bold uppercase disabled:opacity-50 active:scale-95 transition-all shadow-lg"
+          >
             {isUploading ? "UPLOADING..." : "Post Flyer"}
           </button>
         </div>
