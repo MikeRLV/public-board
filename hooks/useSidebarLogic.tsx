@@ -29,7 +29,7 @@ export function useSidebarLogic(props: any) {
     const savedTheme = localStorage.getItem("blocal_theme") || "default";
     setThemeState(savedTheme);
     document.documentElement.setAttribute('data-theme', savedTheme);
-  }, [props?.setActiveTowns]);
+  }, []); // Removed setActiveTowns from dependency to prevent infinite loops during hydration
 
   // PERSISTENCE: Sync changes
   useEffect(() => {
@@ -54,8 +54,12 @@ export function useSidebarLogic(props: any) {
   const handleAddTown = (val: string) => {
     const slug = slugify(val);
     if (!slug || typeof props?.setActiveTowns !== 'function') return;
-    if (!props.activeTowns.includes(slug)) {
-      props.setActiveTowns([...props.activeTowns, slug]);
+    
+    // SAFETY: Ensure we have an array to work with
+    const currentActive = props.activeTowns || [];
+    
+    if (!currentActive.includes(slug)) {
+      props.setActiveTowns([...currentActive, slug]);
     }
     setTownInput("");
   };
@@ -67,6 +71,7 @@ export function useSidebarLogic(props: any) {
   return {
     townInput, setTownInput, textScale, adjustScale, handleAddTown,
     theme, setTheme,
+    // This allows all sidebar components to scale together
     scaled: (px: number) => ({ fontSize: `calc(${px}px * ${textScale})` })
   };
 }

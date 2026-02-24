@@ -15,7 +15,6 @@ export function EventPost({ city }: { city: string }) {
   const [isSaving, setIsSaving] = useState(false);
   const router = useRouter();
 
-  // Pure Text State (No Files)
   const [title, setTitle] = useState("");
   const [eventDate, setEventDate] = useState("");
 
@@ -28,13 +27,18 @@ export function EventPost({ city }: { city: string }) {
     setIsSaving(true);
 
     try {
-      // Direct Database Insert
-      const { error } = await supabase.from("flyers").insert({
-        city_slug: city,
-        location_name: title,           // Using this as the Event Title
-        event_start: new Date(eventDate).toISOString(),
-        image_url: null                 // Explicitly null
-      });
+      // 1. USE UPSERT TO PREVENT DUPLICATES
+      // This checks if 'location_name' already exists.
+      // If it does, it updates the original flyer instead of creating a new one.
+      const { error } = await supabase.from("flyers").upsert(
+        {
+          city_slug: city,
+          location_name: title,           // Used as the unique identifier/title
+          event_start: new Date(eventDate).toISOString(),
+          image_url: null                 
+        }, 
+        { onConflict: 'location_name' }   // Targets your Unique Constraint
+      );
 
       if (error) throw error;
 
@@ -42,7 +46,7 @@ export function EventPost({ city }: { city: string }) {
       setIsOpen(false);
       setTitle("");
       setEventDate("");
-      router.refresh(); // Refresh the calendar
+      router.refresh(); 
       
     } catch (error: any) {
       alert("Error: " + error.message);
@@ -53,7 +57,6 @@ export function EventPost({ city }: { city: string }) {
 
   return (
     <>
-      {/* TRIGGER BUTTON: Themed to match sidebar/header buttons */}
       <button
         onClick={() => setIsOpen(true)}
         style={{ backgroundColor: 'var(--primary)', color: 'var(--bg-main)' }}
@@ -65,13 +68,12 @@ export function EventPost({ city }: { city: string }) {
       {isOpen && (
         <div 
           className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[130] p-4 transition-all"
-          onClick={() => setIsOpen(false)} // Close on overlay click
+          onClick={() => setIsOpen(false)}
         >
-          {/* MODAL CONTAINER: Using theme BG and Border variables */}
           <div 
             style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)' }}
             className="border p-6 rounded-lg max-w-md w-full relative shadow-[0_0_50px_rgba(0,0,0,0.5)] transition-colors duration-300"
-            onClick={e => e.stopPropagation()} // Prevent closing when clicking inside
+            onClick={e => e.stopPropagation()}
           >
             <button
               onClick={() => setIsOpen(false)}
@@ -85,7 +87,6 @@ export function EventPost({ city }: { city: string }) {
             </h2>
 
             <div className="space-y-4">
-              {/* TITLE INPUT */}
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] mb-1">
                   Event Title
@@ -101,7 +102,6 @@ export function EventPost({ city }: { city: string }) {
                 />
               </div>
 
-              {/* DATE INPUT */}
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] mb-1">
                   Date & Time
@@ -115,7 +115,6 @@ export function EventPost({ city }: { city: string }) {
                 />
               </div>
 
-              {/* SAVE BUTTON: High contrast themed button */}
               <button
                 onClick={handleSave}
                 disabled={isSaving}

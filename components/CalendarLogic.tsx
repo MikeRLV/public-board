@@ -25,7 +25,6 @@ export function CalendarLogic({ city }: { city: string }) {
   const [isBucketModalOpen, setIsBucketModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
-  // All shared state comes from this hook
   const {
     userId, filteredEvents, weightedTags, weightedLocals, 
     savedLocations, activeTags, setActiveTags,
@@ -41,9 +40,11 @@ export function CalendarLogic({ city }: { city: string }) {
 
   const todayStr = useMemo(() => dayjs().format('YYYY-MM-DD'), []);
 
+  // --- UPDATED POST LOGIC FOR ARRAY BUCKETS ---
   const handlePostSubmit = async () => {
     if (isUploading || !formState.image || !formState.town) return;
 
+    // 1. Format all entered LoCALs into a valid slug array
     const localsArray = formState.town
       .split(',')
       .map(t => slugify(t))
@@ -61,28 +62,35 @@ export function CalendarLogic({ city }: { city: string }) {
       const { data: urlData } = supabase.storage.from('flyers').getPublicUrl(fileName);
       const tags = formState.tags.split(',').map(t => slugify(t)).filter(t => t !== "");
 
-      for (const localSlug of localsArray) {
-        const { data: insertedData, error: insertError } = await supabase.from('flyers').insert({
-          city_slug: localSlug,
-          town_name: localSlug, 
-          title: formState.title, 
-          location_name: formState.place, 
-          price: formState.price, 
-          description: formState.desc, 
-          image_url: urlData.publicUrl, 
-          event_start: dayjs(formState.date).hour(12).toISOString()
-        }).select(); 
+      // 2. Insert ONE flyer with an ARRAY of cities
+      // Using upsert with title conflict handles the "Duplicate Key" error
+      const { data: insertedData, error: insertError } = await supabase.from('flyers').upsert({
+        city_slug: localsArray,     // The bucket array
+        town_name: localsArray[0],  // Primary town for legacy support
+        title: formState.title, 
+        location_name: formState.place, 
+        price: formState.price, 
+        description: formState.desc, 
+        image_url: urlData.publicUrl, 
+        event_start: dayjs(formState.date).hour(12).toISOString()
+      }, { onConflict: 'title' }).select(); 
 
-        if (!insertError && insertedData?.[0]) {
-          for (const t of tags) {
-            await supabase.rpc('vote_on_tag', { target_flyer_id: insertedData[0].id, target_tag_name: t, vote_val: 1, voter_id: userId });
-          }
+      if (!insertError && insertedData?.[0]) {
+        for (const t of tags) {
+          await supabase.rpc('vote_on_tag', { 
+            target_flyer_id: insertedData[0].id, 
+            target_tag_name: t, 
+            vote_val: 1, 
+            voter_id: userId 
+          });
         }
       }
 
       setFormState({ title: "", town: "", place: "", price: "", desc: "", date: "", tags: "", image: null, isAllAges: false, is18Plus: false, is21Plus: false });
       setIsPostModalOpen(false); 
       fetchEvents(); 
+    } catch (err: any) {
+      alert("Error: " + err.message);
     } finally { 
       setIsUploading(false); 
     }
@@ -118,7 +126,6 @@ export function CalendarLogic({ city }: { city: string }) {
       />
       
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        {/* FIX: Ensure all shared state props are passed here */}
         <CalendarHeader 
           currentDate={currentDate} 
           setCurrentDate={setCurrentDate} 

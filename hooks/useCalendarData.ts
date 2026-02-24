@@ -28,37 +28,77 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs) {
   const slugify = (text: string) => 
     text.toLowerCase().trim().replace(/[\s_]+/g, "-").replace(/[^\w-+]+/g, "").replace(/--+/g, "-").replace(/^-+|-+$/g, "");
 
+  // --- RECOVERY LOGIC: MONTHLY POOLS + GLOBAL FALLBACK ---
   const fetchPools = async () => {
-    const { data, error } = await supabase.from('flyer_tags').select('vote_count, tags(name)').limit(500);
-    
-    if (!error && data) {
-      const tagCounts: Record<string, number> = {};
-      data.forEach((ft: any) => {
-        const name = ft.tags?.name;
-        if (name && slugify(name) !== 'spam') { 
-          const key = slugify(name);
-          tagCounts[key] = (tagCounts[key] || 0) + (ft.vote_count || 0);
-        }
-      });
-      setWeightedTags(Object.entries(tagCounts).map(([name, weight]) => ({ name, weight })).sort((a, b) => b.weight - a.weight));
+    const start = currentDate.startOf('month').toISOString();
+    const end = currentDate.endOf('month').toISOString();
+    const citySlug = city ? slugify(city) : null;
+    const targetCities = Array.from(new Set([...activeTowns, citySlug].filter(Boolean)));
+
+    if (targetCities.length === 0) {
+      setWeightedTags([]);
+      return;
     }
 
-    const { data: localData } = await supabase.from('flyers').select('town_name');
+    try {
+      // 1. ATTEMPT: Fetch tags for specific month/city bucket
+      const { data: monthFlyers } = await supabase
+        .from('flyers')
+        .select('flyer_tags(vote_count, tags(name)), city_slug')
+        .or(`city_slug.cs.{${targetCities.join(',')}}`) 
+        .gte('event_start', start)
+        .lte('event_start', end);
+
+      let tagCounts: Record<string, number> = {};
+
+      if (monthFlyers && monthFlyers.length > 0) {
+        monthFlyers.forEach((flyer: any) => {
+          flyer.flyer_tags?.forEach((ft: any) => {
+            const tagName = ft.tags?.name;
+            if (tagName && slugify(tagName) !== 'spam') {
+              const key = slugify(tagName);
+              tagCounts[key] = (tagCounts[key] || 0) + (ft.vote_count || 0);
+            }
+          });
+        });
+      }
+
+      // 2. RECOVERY FALLBACK: If monthly found nothing, pull from the global tag table
+      if (Object.keys(tagCounts).length === 0) {
+        const { data: globalTags } = await supabase
+          .from('flyer_tags')
+          .select('vote_count, tags(name)')
+          .limit(200);
+
+        globalTags?.forEach((ft: any) => {
+          const tagName = ft.tags?.name;
+          if (tagName && slugify(tagName) !== 'spam') {
+            const key = slugify(tagName);
+            tagCounts[key] = (tagCounts[key] || 0) + (ft.vote_count || 0);
+          }
+        });
+      }
+
+      const weighted = Object.entries(tagCounts)
+        .map(([name, weight]) => ({ name, weight }))
+        .sort((a, b) => b.weight - a.weight);
+
+      setWeightedTags(weighted);
+    } catch (err) {
+      console.error("Pool fetch failed:", err);
+    }
+
+    // Always refresh weighted LoCALs for sidebar buckets
+    const { data: localData } = await supabase.from('weighted_locals').select('name, weight').order('weight', { ascending: false });
     if (localData) {
-      const localCounts: Record<string, number> = {};
-      localData.forEach((f: any) => {
-        if (f.town_name) {
-          const key = f.town_name.toLowerCase();
-          localCounts[key] = (localCounts[key] || 0) + 1;
-        }
-      });
-      setWeightedLocals(Object.entries(localCounts).map(([name, weight]) => ({ name, weight })).sort((a, b) => b.weight - a.weight));
+      setWeightedLocals(localData);
+      setSavedLocations(localData.map(item => item.name));
     }
   };
 
-  useEffect(() => { fetchPools(); }, []); 
-  useEffect(() => { fetchPools(); }, [events]); 
+  useEffect(() => { fetchPools(); }, [currentDate, city, activeTowns, events]); 
 
+  // --- Tag Sync Logic ---
   useEffect(() => {
     let current = [...activeTags];
     let changed = false;
@@ -81,60 +121,57 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs) {
     let storedId = localStorage.getItem("local_user_id") || crypto.randomUUID();
     localStorage.setItem("local_user_id", storedId);
     setUserId(storedId);
-
-    const fetchUniqueTowns = async () => {
-      const { data } = await supabase.from('flyers').select('town_name').not('town_name', 'is', null);
-      if (data) {
-        const unique = Array.from(new Set(data.map((item: any) => item.town_name))).sort((a: any, b: any) => a.localeCompare(b));
-        setSavedLocations(unique);
-      }
-    };
-    fetchUniqueTowns();
   }, []);
 
   const fetchEvents = async () => {
     const start = currentDate.startOf('month').toISOString();
     const end = currentDate.endOf('month').toISOString();
-    let query = supabase.from('flyers').select('*, flyer_tags(vote_count, tags(name))').gte('event_start', start).lte('event_start', end);
+    
+    let query = supabase
+      .from('flyers')
+      .select('*, flyer_tags(vote_count, tags(name))')
+      .gte('event_start', start)
+      .lte('event_start', end);
+
     const citySlug = city ? slugify(city) : null;
-    if (activeTowns.length > 0 || citySlug) {
-      const townFilters = activeTowns.map((t: string) => `town_name.eq.${t}`);
-      const cityFilter = citySlug ? `city_slug.eq.${citySlug}` : '';
-      query = query.or([...townFilters, cityFilter].filter(Boolean).join(','));
-      const { data } = await query;
-      if (data) setEvents(data);
-    } else { setEvents([]); }
+    const allSearchTowns = Array.from(new Set([...activeTowns, citySlug].filter(Boolean)));
+
+    if (allSearchTowns.length > 0) {
+      query = query.or(`city_slug.cs.{${allSearchTowns.join(',')}}`);
+      const { data, error } = await query;
+      if (!error && data) setEvents(data);
+    } else { 
+      setEvents([]); 
+    }
   };
 
   useEffect(() => { fetchEvents(); }, [currentDate, city, activeTowns]);
 
-  // --- REFACTORED FILTERING ENGINE ---
   const filteredEvents = useMemo(() => {
     if (activeTowns.length === 0 && !city) return [];
     
-    return events.filter((e: any) => {
-      // 1. Geography Check (LoCAL or City)
-      if (activeTowns.length > 0 && !activeTowns.includes(e.town_name)) return false;
+    const citySlug = city ? slugify(city) : null;
+    const currentViewTowns = Array.from(new Set([...activeTowns, citySlug].filter(Boolean)));
 
-      // 2. Spam Filter (Always active unless showSpam is toggled)
-      const totalVotes = e.flyer_tags.reduce((acc: number, ft: any) => acc + Math.max(0, ft.vote_count || 0), 0);
-      const isSpam = totalVotes > 0 && ((e.flyer_tags.find((ft: any) => slugify(ft.tags.name) === 'spam')?.vote_count || 0) / totalVotes >= 0.25);
+    return events.filter((e: any) => {
+      const eventSlugs = Array.isArray(e.city_slug) ? e.city_slug : [e.city_slug];
+      const isInTargetLoCAL = currentViewTowns.some(town => eventSlugs.includes(town));
+      if (!isInTargetLoCAL) return false;
+
+      const totalVotes = e.flyer_tags?.reduce((acc: number, ft: any) => acc + Math.max(0, ft.vote_count || 0), 0) || 0;
+      const isSpam = totalVotes > 0 && ((e.flyer_tags?.find((ft: any) => slugify(ft.tags.name) === 'spam')?.vote_count || 0) / totalVotes >= 0.25);
       if (isSpam && !showSpam) return false;
 
-      // 3. MASTER OVERRIDE: If Show All is active, let it through
       if (showAllEvents) return true;
-
-      // 4. Tag Dependency: If not "Showing All", we must have active tags
       if (activeTags.length === 0) return false;
 
-      // 5. Normal Tag Filtering
-      const eventTags = e.flyer_tags.map((ft: any) => slugify(ft.tags.name));
+      const eventTags = e.flyer_tags?.map((ft: any) => slugify(ft.tags.name)) || [];
       const passesTags = filterMode === 'OR' 
         ? activeTags.some((tag: string) => eventTags.includes(slugify(tag))) 
         : activeTags.every((tag: string) => eventTags.includes(slugify(tag)));
         
       return passesTags;
-    }).sort((a, b) => b.flyer_tags.length - a.flyer_tags.length);
+    }).sort((a, b) => (b.flyer_tags?.length || 0) - (a.flyer_tags?.length || 0));
   }, [events, activeTags, activeTowns, city, filterMode, showAllEvents, showSpam]);
 
   return {

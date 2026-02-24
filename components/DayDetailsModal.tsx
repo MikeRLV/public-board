@@ -13,8 +13,9 @@ const supabase = createClient(
 
 export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClick }: any) {
   const [tagInput, setTagInput] = useState<Record<string, string>>({}); 
+  const [newLocalInput, setNewLocalInput] = useState<Record<string, string>>({});
+  const [projecting, setProjecting] = useState<Record<string, boolean>>({});
 
-  // SCALING HELPER: References the global variable set by the Sidebar
   const scaled = (base: number) => ({ fontSize: `calc(${base}px * var(--text-scale, 1))` });
 
   const dayEvents = events.filter((e: any) => dayjs(e.event_start).format('YYYY-MM-DD') === activeDay);
@@ -35,6 +36,49 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
     }
   };
 
+  const handleAddToOtherLocal = async (e: any) => {
+    // 1. Slugify input for DB processing
+    const targetLocal = newLocalInput[e.id]?.trim().toLowerCase().replace(/\s+/g, '-');
+    if (!targetLocal || projecting[e.id]) return;
+
+    setProjecting({ ...projecting, [e.id]: true });
+
+    try {
+      // 2. MERGE LOGIC: Combine existing city_slug array with the new target
+      const currentSlugs = Array.isArray(e.city_slug) ? e.city_slug : (e.city_slug ? [e.city_slug] : []);
+      const updatedSlugs = Array.from(new Set([...currentSlugs, targetLocal]));
+
+      // 3. UPSERT: Save the updated bucket while satisfying all DB constraints
+      const { error } = await supabase.from("flyers").upsert({
+        title: e.title,
+        description: e.description,
+        event_start: e.event_start,
+        price: e.price,
+        image_url: e.image_url,
+        location_name: e.location_name, // Mandatory field
+        city_slug: updatedSlugs,        // Merged bucket
+      }, { onConflict: 'title' });       // Conflict on unique title
+
+      if (error) throw error;
+      
+      // 4. CUSTOM FEEDBACK: Revert slug for the alert message
+      const readableLocal = targetLocal.replace(/-/g, ' ');
+      alert(`Event added to ${readableLocal} LoCAL.`);
+      
+      setNewLocalInput({ ...newLocalInput, [e.id]: "" });
+      onVote(); 
+    } catch (err: any) {
+      // Handle network or timeout issues
+      if (err.name === 'AbortError') {
+        alert("The operation was aborted. Check your SQL unique title constraint or RLS policies.");
+      } else {
+        alert("Error: " + err.message);
+      }
+    } finally {
+      setProjecting({ ...projecting, [e.id]: false });
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm p-2 md:p-4 font-mono" onClick={onClose}>
       <div 
@@ -42,8 +86,6 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
         className="w-full max-w-5xl h-[95vh] md:h-[85vh] border rounded-xl flex flex-col overflow-hidden shadow-2xl" 
         onClick={e => e.stopPropagation()}
       >
-        
-        {/* Modal Header */}
         <div className="flex justify-between items-center p-4 border-b border-white/10 bg-black/40 shrink-0">
           <div className="flex flex-col">
             <h2 style={{ ...scaled(18), color: 'var(--primary)' }} className="font-bold uppercase leading-none">Event Info</h2>
@@ -55,15 +97,12 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
         </div>
         
         <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 md:space-y-12 custom-scrollbar">
-          
           {dayEvents.map((e: any) => {
             const sortedTags = [...(e.flyer_tags || [])].sort((a, b) => (b.vote_count || 0) - (a.vote_count || 0));
-            
             return (
               <div key={e.id} className="bg-black/20 rounded-lg border border-white/5 p-4 md:p-12 shadow-2xl">
                 <div className="flex flex-col md:flex-row gap-8 md:gap-12 items-start">
                   
-                  {/* LEFT COLUMN: Media & Core Info */}
                   <div className="w-full md:w-2/5 md:sticky md:top-0 self-start pt-2">
                     <div className="relative group flex items-center justify-center mb-6 md:mb-10">
                       <div className="absolute -inset-3 border border-white/10 rounded-sm pointer-events-none group-hover:border-[var(--primary)]/20 transition-colors hidden md:block" />
@@ -90,29 +129,47 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
                     <div className="flex flex-col gap-4">
                       <div style={scaled(13)} className="font-black tracking-tighter uppercase leading-none">
                         <span style={{ color: 'var(--primary)', opacity: 0.5 }} className="mr-2">LOCATION:</span>
-                        <span className="text-[var(--text-main)]">{e.location_name}</span>
+                        <span className="text-[var(--text-main)] uppercase">{e.location_name}</span>
                       </div>
 
-                      <div className="flex items-center justify-between gap-2 md:gap-4 w-full">
-                        <div style={scaled(13)} className="font-black tracking-tighter uppercase leading-none whitespace-nowrap">
-                          <span style={{ color: 'var(--primary)', opacity: 0.5 }} className="mr-2">PRICE:</span>
-                          <span className="text-[var(--text-main)]">{e.price || 'FREE'}</span>
+                      <div className="flex flex-col gap-3 w-full">
+                        <div className="flex items-center justify-between">
+                          <div style={scaled(13)} className="font-black tracking-tighter uppercase leading-none whitespace-nowrap">
+                            <span style={{ color: 'var(--primary)', opacity: 0.5 }} className="mr-2">PRICE:</span>
+                            <span className="text-[var(--text-main)] uppercase">{e.price || 'FREE'}</span>
+                          </div>
+
+                          <button 
+                            onClick={() => onVote(e.id, 'spam', 1)} 
+                            style={scaled(9)}
+                            className="border border-red-900/40 bg-red-900/10 px-2 py-1 text-red-500/60 hover:bg-red-500 hover:text-white transition-all uppercase font-black rounded-sm tracking-widest shrink-0"
+                          >
+                            Report Spam
+                          </button>
                         </div>
 
-                        <button 
-                          onClick={() => onVote(e.id, 'spam', 1)} 
-                          style={scaled(9)}
-                          className="border border-red-900/40 bg-red-900/10 px-2 py-1 md:px-3 md:py-1.5 text-red-500/60 hover:bg-red-500 hover:text-white transition-all uppercase font-black rounded-sm tracking-widest shrink-0"
-                        >
-                          Report Spam
-                        </button>
+                        <div className="flex gap-2 pt-2 mt-2 border-t border-white/5">
+                          <input 
+                            style={{ ...scaled(11), backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)' }}
+                            type="text"
+                            placeholder="Add to other LoCAL"
+                            value={newLocalInput[e.id] || ""}
+                            onChange={ev => setNewLocalInput({ ...newLocalInput, [e.id]: ev.target.value })}
+                            className="flex-1 border p-2 outline-none focus:border-[var(--primary)] text-xs font-bold uppercase rounded-sm"
+                          />
+                          <button 
+                            onClick={() => handleAddToOtherLocal(e)}
+                            style={{ ...scaled(10), backgroundColor: 'var(--primary)', color: 'var(--bg-main)' }}
+                            className={`px-3 py-2 font-black uppercase rounded-sm transition-all ${projecting[e.id] ? 'opacity-50' : 'hover:opacity-80 active:scale-95'}`}
+                          >
+                            {projecting[e.id] ? '...' : '+ LoCAL'}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* RIGHT COLUMN: Description & Tags */}
                   <div className="flex-1 flex flex-col w-full pt-4 md:pt-2 overflow-hidden">
-                    {/* Added break-all to ensure long URLs wrap correctly */}
                     <p style={scaled(15)} className="text-[var(--text-main)] opacity-80 mb-8 md:mb-12 leading-relaxed whitespace-pre-wrap font-sans break-all">
                       {e.description}
                     </p>
@@ -121,7 +178,7 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
                       <div className="flex flex-wrap gap-2 pt-6 md:pt-8 border-t border-white/5">
                         {sortedTags.map((ft: any) => (
                           <div key={ft.tags?.name} className="bg-black/40 border border-white/10 px-2 py-1 md:px-3 md:py-1.5 flex items-center gap-2 md:gap-3 rounded-md hover:border-[var(--primary)]/40 transition-all">
-                            <span style={scaled(10)} className="text-[var(--text-muted)] font-bold uppercase">#{ft.tags?.name}</span>
+                            <span style={scaled(10)} className="text-[var(--text-muted)] font-bold uppercase">{ft.tags?.name}</span>
                             <span style={{ ...scaled(10), color: 'var(--primary)' }} className="font-black border-l border-white/10 pl-2 md:pl-3">{ft.vote_count}</span>
                             <div className="flex gap-2 ml-1 text-[var(--text-main)]">
                               <button onClick={() => onVote(e.id, ft.tags?.name, 1)} className="hover:text-green-400 text-xs font-bold transition-all transform hover:scale-125">+</button>
@@ -131,12 +188,11 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
                         ))}
                       </div>
 
-                      {/* SCALED INPUT BOX: Scaling text inside the tag input */}
                       <div className="relative flex gap-2 w-full max-w-xs pt-4">
                         <input 
                           style={{ ...scaled(11), backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)' }}
                           className="border p-2 outline-none focus:border-[var(--primary)] w-full uppercase font-bold text-[var(--text-main)] rounded-sm"
-                          placeholder="New Tag..."
+                          placeholder="New Tag"
                           value={tagInput[e.id] || ""}
                           onChange={ev => setTagInput({ ...tagInput, [e.id]: ev.target.value })}
                           onKeyDown={ev => ev.key === 'Enter' && handleAddTag(e.id)}
@@ -155,26 +211,17 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
               </div>
             );
           })}
-
-          {/* POST INVITATION */}
-          <div 
-            style={{ borderColor: 'var(--primary)' }}
-            className="border border-dashed border-opacity-40 rounded-lg p-8 bg-white/[0.03] flex flex-col items-center justify-center gap-4"
-          >
+          
+          <div style={{ borderColor: 'var(--primary)' }} className="border border-dashed border-opacity-40 rounded-lg p-8 bg-white/[0.03] flex flex-col items-center justify-center gap-4">
             <p style={scaled(10)} className="text-[var(--text-muted)] uppercase tracking-[0.3em] font-black text-center">
               {dayjs(activeDay).isBefore(dayjs().startOf('day')) ? "Past days cannot be updated" : "Know of something else happening on this day?"}
             </p>
             {dayjs(activeDay).isSameOrAfter(dayjs().startOf('day')) && (
-              <button 
-                onClick={() => { onClose(); onPostClick(activeDay); }} 
-                style={{ ...scaled(11), backgroundColor: 'var(--primary)', color: 'var(--bg-main)' }}
-                className="px-10 py-3 rounded-sm font-black uppercase shadow-[0_0_20px_rgba(0,0,0,0.4)] transition-all hover:opacity-90 hover:scale-105 active:scale-95 border border-white/10"
-              >
+              <button onClick={() => { onClose(); onPostClick(activeDay); }} style={{ ...scaled(11), backgroundColor: 'var(--primary)', color: 'var(--bg-main)' }} className="px-10 py-3 rounded-sm font-black uppercase shadow-[0_0_20px_rgba(0,0,0,0.4)] transition-all hover:opacity-90 hover:scale-105 active:scale-95 border border-white/10">
                 + Post Flyer
               </button>
             )}
           </div>
-
         </div>
       </div>
     </div>
