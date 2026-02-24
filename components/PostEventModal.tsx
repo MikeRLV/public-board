@@ -11,6 +11,7 @@ export function PostEventModal({
 }: any) {
   const [suggestionIdx, setSuggestionIdx] = useState(-1);
   const [townSuggestionIdx, setTownSuggestionIdx] = useState(-1);
+  const [showErrors, setShowErrors] = useState(false); // Validation state
   const tagInputRef = useRef<HTMLInputElement>(null);
   const townInputRef = useRef<HTMLInputElement>(null);
 
@@ -117,10 +118,41 @@ export function PostEventModal({
     if (changed) setFormState({ ...formState, tags: currentTags.join(', ') + (currentTags.length > 0 ? ", " : "") });
   }, [formState.price, formState.isAllAges, formState.is18Plus, formState.is21Plus]);
 
+
+  // --- VALIDATION LOGIC ---
+  const tagsArray = (formState.tags || "").split(',').map((t: string) => t.trim().toLowerCase()).filter((t: string) => t !== "");
+  const hasValidTag = tagsArray.some((t: string) => !["free", "all-ages", "18+", "21+"].includes(t));
+  const hasAge = formState.isAllAges || formState.is18Plus || formState.is21Plus;
+
+  const handlePreSave = () => {
+    const isValid = 
+      formState.title?.trim() && 
+      formState.town?.trim() && 
+      formState.place?.trim() && 
+      formState.price?.trim() && 
+      formState.date && 
+      formState.image && 
+      hasAge && 
+      hasValidTag;
+
+    if (!isValid) {
+      setShowErrors(true);
+      return;
+    }
+    
+    setShowErrors(false);
+    onSave(); // Trigger the actual save passed from CalendarLogic
+  };
+
+  const handleClose = () => {
+    setShowErrors(false);
+    onClose();
+  };
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/95 p-4 overflow-y-auto font-mono" onClick={onClose}>
+    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/95 p-4 overflow-y-auto font-mono" onClick={handleClose}>
       <div 
         style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)' }}
         className="w-full max-w-lg border rounded-xl p-8 flex flex-col my-auto relative shadow-2xl transition-colors duration-300" 
@@ -133,22 +165,31 @@ export function PostEventModal({
         <div className="space-y-4">
           <input 
             type="date" min={todayStr} 
-            style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)' }}
-            className="w-full border p-3 text-[var(--text-main)] text-xs color-scheme-dark focus:border-[var(--primary)] outline-none" 
+            style={{ 
+              backgroundColor: 'var(--bg-main)', 
+              borderColor: showErrors && !formState.date ? '#ef4444' : 'var(--border-color)' 
+            }}
+            className="w-full border p-3 text-[var(--text-main)] text-xs color-scheme-dark focus:border-[var(--primary)] outline-none transition-colors" 
             value={formState.date || ""} onChange={e => setFormState({ ...formState, date: e.target.value })} 
           />
           
           <input 
-            style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)' }}
-            className="w-full border p-3 text-[var(--text-main)] text-xs uppercase font-black focus:border-[var(--primary)] outline-none" 
+            style={{ 
+              backgroundColor: 'var(--bg-main)', 
+              borderColor: showErrors && !formState.title?.trim() ? '#ef4444' : 'var(--border-color)' 
+            }}
+            className="w-full border p-3 text-[var(--text-main)] text-xs uppercase font-black focus:border-[var(--primary)] outline-none transition-colors" 
             placeholder="EVENT TITLE" value={formState.title || ""} onChange={e => setFormState({ ...formState, title: e.target.value })} 
           />
           
           <div className="relative">
             <input 
               ref={townInputRef}
-              style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)' }}
-              className="w-full border p-3 text-[var(--text-main)] text-[11px] focus:border-[var(--primary)] outline-none" 
+              style={{ 
+                backgroundColor: 'var(--bg-main)', 
+                borderColor: showErrors && !formState.town?.trim() ? '#ef4444' : 'var(--border-color)' 
+              }}
+              className="w-full border p-3 text-[var(--text-main)] text-[11px] focus:border-[var(--primary)] outline-none transition-colors" 
               placeholder="LoCAL(s) [comma separated]" 
               value={formState.town || ""} 
               onChange={e => setFormState({ ...formState, town: e.target.value })} 
@@ -172,19 +213,25 @@ export function PostEventModal({
           </div>
 
           <input 
-            style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)' }}
-            className="w-full border p-3 text-[var(--text-main)] text-xs focus:border-[var(--primary)] outline-none" 
+            style={{ 
+              backgroundColor: 'var(--bg-main)', 
+              borderColor: showErrors && !formState.place?.trim() ? '#ef4444' : 'var(--border-color)' 
+            }}
+            className="w-full border p-3 text-[var(--text-main)] text-xs focus:border-[var(--primary)] outline-none transition-colors" 
             placeholder="VENUE NAME" value={formState.place || ""} onChange={e => setFormState({ ...formState, place: e.target.value })} 
           />
           
           <input 
-            style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)' }}
-            className="w-full border p-3 text-[var(--text-main)] text-xs focus:border-[var(--primary)] outline-none" 
+            style={{ 
+              backgroundColor: 'var(--bg-main)', 
+              borderColor: showErrors && !formState.price?.trim() ? '#ef4444' : 'var(--border-color)' 
+            }}
+            className="w-full border p-3 text-[var(--text-main)] text-xs focus:border-[var(--primary)] outline-none transition-colors" 
             placeholder="PRICE" value={formState.price || ""} onChange={e => setFormState({ ...formState, price: e.target.value })} 
           />
           
           {/* Age Restriction Checkboxes */}
-          <div className="flex flex-wrap gap-4 py-2 px-1">
+          <div className="flex flex-wrap gap-4 py-2 px-1 rounded transition-colors" style={{ borderBottom: showErrors && !hasAge ? '1px dashed #ef4444' : '1px dashed transparent' }}>
             {[
               { id: 'isAllAges', label: 'All Ages', color: 'bg-emerald-600' },
               { id: 'is18Plus', label: '18+ Only', color: 'bg-yellow-600' },
@@ -193,7 +240,10 @@ export function PostEventModal({
               <label key={age.id} className="flex items-center gap-2 cursor-pointer group">
                 <input type="checkbox" className="hidden" checked={!!formState[age.id]} onChange={e => setFormState({...formState, [age.id]: e.target.checked})} />
                 <div 
-                  style={{ borderColor: formState[age.id] ? 'transparent' : 'var(--border-color)' }}
+                  style={{ 
+                    // Red border if unselected during an error state, otherwise fallback to standard
+                    borderColor: formState[age.id] ? 'transparent' : (showErrors && !hasAge ? '#ef4444' : 'var(--border-color)') 
+                  }}
                   className={`w-4 h-4 border transition-all ${formState[age.id] ? age.color : ''}`} 
                 />
                 <span className={`text-[10px] font-bold uppercase transition-colors ${formState[age.id] ? 'text-[var(--text-main)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text-main)]'}`}>
@@ -206,9 +256,12 @@ export function PostEventModal({
           <div className="relative">
             <input 
               ref={tagInputRef}
-              style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color)' }}
-              className="w-full border p-3 text-[var(--text-main)] text-xs font-mono focus:border-[var(--primary)] outline-none" 
-              placeholder="TAG(s) [comma separated]" 
+              style={{ 
+                backgroundColor: 'var(--bg-main)', 
+                borderColor: showErrors && !hasValidTag ? '#ef4444' : 'var(--border-color)' 
+              }}
+              className="w-full border p-3 text-[var(--text-main)] text-xs font-mono focus:border-[var(--primary)] outline-none transition-colors" 
+              placeholder="TAG(s) [comma separated, at least one custom tag required]" 
               value={formState.tags || ""} 
               onChange={e => setFormState({ ...formState, tags: e.target.value })} 
               onKeyDown={(e) => handleKeyDown(e, 'tag')}
@@ -237,9 +290,16 @@ export function PostEventModal({
           />
           
           {/* Browse Section */}
-          <div style={{ borderColor: 'var(--border-color)' }} className="relative border bg-black/20 p-3 rounded-sm flex items-center justify-between group">
+          <div 
+            style={{ 
+              borderColor: showErrors && !formState.image ? '#ef4444' : 'var(--border-color)' 
+            }} 
+            className="relative border bg-black/20 p-3 rounded-sm flex items-center justify-between group transition-colors"
+          >
             <input type="file" accept=".jpg,.jpeg,.png" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={e => setFormState({ ...formState, image: e.target.files?.[0] || null })} />
-            <span className="text-[10px] text-[var(--text-muted)] truncate uppercase">{formState.image ? formState.image.name : "SELECT FLYER IMAGE"}</span>
+            <span className={`text-[10px] truncate uppercase ${showErrors && !formState.image ? 'text-red-500' : 'text-[var(--text-muted)]'}`}>
+              {formState.image ? formState.image.name : "SELECT FLYER IMAGE"}
+            </span>
             <div 
               style={{ backgroundColor: 'var(--primary)', color: 'var(--bg-main)' }}
               className="px-2 py-1 text-[9px] font-bold uppercase transition-opacity hover:opacity-80"
@@ -247,19 +307,27 @@ export function PostEventModal({
               Browse
             </div>
           </div>
+          
+          {/* Optional Error Message */}
+          {showErrors && (
+             <p className="text-red-500 text-xs font-bold uppercase tracking-wide mt-2">
+               Please fill out all required fields.
+             </p>
+          )}
+
         </div>
 
         {/* Footer Actions */}
         <div className="flex gap-4 mt-8">
           <button 
-            onClick={onClose} 
+            onClick={handleClose} 
             className="flex-1 py-3 text-xs font-bold border border-[var(--border-color)] text-[var(--text-main)] uppercase hover:bg-white/5 transition-colors"
           >
             Cancel
           </button>
           <button 
-            onClick={onSave} 
-            disabled={isUploading || !formState.town} 
+            onClick={handlePreSave} 
+            disabled={isUploading} 
             style={{ 
               backgroundColor: isUploading ? 'var(--text-muted)' : 'var(--primary)', 
               color: 'var(--bg-main)' 

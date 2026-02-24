@@ -24,7 +24,9 @@ export function Sidebar(props: any) {
   const [showHelp, setShowHelp] = useState(false);
   const [showPopularLoCALs, setShowPopularLoCALs] = useState(false);
   const [dbWeightedTowns, setDbWeightedTowns] = useState<any[]>([]);
-  const [filterMode, setFilterMode] = useState<'AND' | 'OR'>('OR');
+  
+  // FIXED: Removed the local [filterMode, setFilterMode] state from here! 
+  // It was "shadowing" the props and preventing the calendar from updating.
   
   const helpTriggerRef = useRef<HTMLDivElement>(null);
   const LoCALPopRef = useRef<HTMLDivElement>(null);
@@ -111,15 +113,15 @@ export function Sidebar(props: any) {
                    className="rounded-full bg-[var(--primary)] shadow-[0_0_12px_var(--primary)] animate-pulse group-hover:scale-150 transition-transform" 
                 />
               </div>
-              <span style={{ color: 'var(--primary)' }} className="font-bold opacity-50 group-hover:opacity-100 uppercase">
-                L<span className="lowercase">o</span>CALs
+              <span style={{ color: 'var(--primary)' }} className="font-bold opacity-50 group-hover:opacity-100">
+                LoCALs
               </span>
             </div>
             
             <div className="flex items-center gap-2 w-full">
               <input 
                 style={scaled(13)} 
-                className="flex-1 min-w-0 bg-neutral-900 border border-neutral-700 p-2 outline-none focus:border-[var(--primary)] font-bold text-[var(--text-main)] uppercase" 
+                className="flex-1 min-w-0 bg-neutral-900 border border-neutral-700 p-2 outline-none focus:border-[var(--primary)] font-bold text-[var(--text-main)] uppercase placeholder:normal-case" 
                 placeholder="+ ADD LoCAL" 
                 value={townInput || ""} 
                 onChange={e => setTownInput(e.target.value)} 
@@ -149,13 +151,20 @@ export function Sidebar(props: any) {
             trendingTags: props.trendingTags, 
             toggleTag, 
             scaled,
-            // We are explicitly looking for this exact prop from the main page
             hasEvents: props.hasEventsThisMonth
           }} />
           
           <div className="h-10 shrink-0" />
 
-          <FilterSection {...{ TagPopRef, filterMode, setFilterMode, activeTags, toggleTag, scaled }} />
+          {/* FIXED: Hooked this directly to `props` so it communicates with the calendar hook */}
+          <FilterSection {...{ 
+            TagPopRef, 
+            filterMode: props.filterMode, 
+            setFilterMode: props.setFilterMode, 
+            activeTags, 
+            toggleTag, 
+            scaled 
+          }} />
         </div>
 
         <ToggleSection {...{ 

@@ -11,6 +11,31 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+// Helper function to make URLs clickable and keep long links contained
+const renderDescriptionWithLinks = (text: string) => {
+  if (!text) return null;
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  
+  return parts.map((part, i) => {
+    if (part.match(urlRegex)) {
+      return (
+        <a 
+          key={i} 
+          href={part} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="text-[var(--primary)] font-bold underline hover:opacity-80 transition-opacity"
+          onClick={(ev) => ev.stopPropagation()}
+        >
+          TICKET LINK (EXTERNAL SITE, PROCEED WITH CAUTION)
+        </a>
+      );
+    }
+    return part; 
+  });
+};
+
 export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClick }: any) {
   const [tagInput, setTagInput] = useState<Record<string, string>>({}); 
   const [newLocalInput, setNewLocalInput] = useState<Record<string, string>>({});
@@ -142,7 +167,7 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
                           <button 
                             onClick={() => onVote(e.id, 'spam', 1)} 
                             style={scaled(9)}
-                            className="border border-red-900/40 bg-red-900/10 px-2 py-1 text-red-500/60 hover:bg-red-500 hover:text-white transition-all uppercase font-black rounded-sm tracking-widest shrink-0"
+                            className="bg-red-700 text-white px-3 py-1 hover:bg-red-600 transition-all uppercase font-black rounded-sm tracking-widest shrink-0"
                           >
                             Report Spam
                           </button>
@@ -170,8 +195,8 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
                   </div>
 
                   <div className="flex-1 flex flex-col w-full pt-4 md:pt-2 overflow-hidden">
-                    <p style={scaled(15)} className="text-[var(--text-main)] opacity-80 mb-8 md:mb-12 leading-relaxed whitespace-pre-wrap font-sans break-all">
-                      {e.description}
+                    <p style={scaled(15)} className="text-[var(--text-main)] opacity-80 mb-8 md:mb-12 leading-relaxed whitespace-pre-wrap font-sans">
+                      {renderDescriptionWithLinks(e.description)}
                     </p>
 
                     <div className="space-y-6 mt-auto">
