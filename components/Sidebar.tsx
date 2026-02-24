@@ -149,9 +149,8 @@ export function Sidebar(props: any) {
             trendingTags: props.trendingTags, 
             toggleTag, 
             scaled,
-            // FIXED: Passing raw data with fallbacks. If your parent component
-            // passes the events using a totally different name, add it here!
-            hasEvents: props.events || props.filteredEvents || props.calendarEvents
+            // We are explicitly looking for this exact prop from the main page
+            hasEvents: props.hasEventsThisMonth
           }} />
           
           <div className="h-10 shrink-0" />

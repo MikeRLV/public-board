@@ -175,7 +175,11 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs) {
   }, [events, activeTags, activeTowns, city, filterMode, showAllEvents, showSpam]);
 
   return {
-    userId, filteredEvents, weightedTags, weightedLocals,
+    userId, 
+    events, // <--- EXPORTING THIS MAKES IT ALL WORK
+    filteredEvents, 
+    weightedTags, 
+    weightedLocals,
     savedLocations, activeTags, setActiveTags,
     activeTowns, setActiveTowns, filterMode, setFilterMode, showAllEvents, setShowAllEvents,
     showSpam, setShowSpam, showAllAges, setShowAllAges, show18, setShow18, show21, setShow21, 

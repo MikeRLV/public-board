@@ -26,7 +26,7 @@ export function CalendarLogic({ city }: { city: string }) {
   const [isUploading, setIsUploading] = useState(false);
 
   const {
-    userId, filteredEvents, weightedTags, weightedLocals, 
+    userId, events, filteredEvents, weightedTags, weightedLocals, 
     savedLocations, activeTags, setActiveTags,
     activeTowns, setActiveTowns, filterMode, setFilterMode, showAllEvents, setShowAllEvents,
     showSpam, setShowSpam, showAllAges, setShowAllAges, show18, setShow18, show21, setShow21, 
@@ -40,11 +40,10 @@ export function CalendarLogic({ city }: { city: string }) {
 
   const todayStr = useMemo(() => dayjs().format('YYYY-MM-DD'), []);
 
-  // --- UPDATED POST LOGIC FOR ARRAY BUCKETS ---
+  // --- POST LOGIC FOR ARRAY BUCKETS ---
   const handlePostSubmit = async () => {
     if (isUploading || !formState.image || !formState.town) return;
 
-    // 1. Format all entered LoCALs into a valid slug array
     const localsArray = formState.town
       .split(',')
       .map(t => slugify(t))
@@ -62,11 +61,9 @@ export function CalendarLogic({ city }: { city: string }) {
       const { data: urlData } = supabase.storage.from('flyers').getPublicUrl(fileName);
       const tags = formState.tags.split(',').map(t => slugify(t)).filter(t => t !== "");
 
-      // 2. Insert ONE flyer with an ARRAY of cities
-      // Using upsert with title conflict handles the "Duplicate Key" error
       const { data: insertedData, error: insertError } = await supabase.from('flyers').upsert({
-        city_slug: localsArray,     // The bucket array
-        town_name: localsArray[0],  // Primary town for legacy support
+        city_slug: localsArray,    
+        town_name: localsArray[0],  
         title: formState.title, 
         location_name: formState.place, 
         price: formState.price, 
@@ -123,6 +120,10 @@ export function CalendarLogic({ city }: { city: string }) {
         onAddEvent={() => setIsPostModalOpen(true)} 
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
+        
+        filteredEvents={filteredEvents} 
+        // FIXED: Only check the raw 'events' array to determine if the month has data
+        hasEventsThisMonth={events && events.length > 0}
       />
       
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
