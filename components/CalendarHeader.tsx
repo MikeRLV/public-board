@@ -7,7 +7,7 @@ import { MonthYearPicker } from "./MonthYearPicker";
 
 dayjs.extend(localeData);
 
-// 1. THEME LAB (Preserved exactly as original)
+// 1. THEME LAB - Defined first to prevent ReferenceError
 function ThemeLab({ customColors, onColorChange, onApplyPreset, theme, setTheme, isMobile }: any) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -29,7 +29,7 @@ function ThemeLab({ customColors, onColorChange, onApplyPreset, theme, setTheme,
       <button onMouseDown={(e) => e.stopPropagation()} onClick={() => setIsOpen(!isOpen)} className={`w-3.5 h-3.5 bg-neutral-800 border-2 flex items-center justify-center text-[8px] font-black ${isOpen ? 'border-white' : 'border-transparent opacity-40'} hover:opacity-100 transition-all text-white`}>?</button>
 
       {isOpen && (
-        <div onMouseDown={(e) => e.stopPropagation()} className={`absolute ${isMobile ? 'right-0' : 'left-full'} top-0 ${isMobile ? 'mt-8' : 'ml-3'} flex flex-col gap-3 bg-neutral-900 border border-white/10 p-3 rounded-sm shadow-2xl z-50 min-w-[165px] animate-in fade-in duration-200`}>
+        <div onMouseDown={(e) => e.stopPropagation()} className={`absolute ${isMobile ? 'right-0' : 'left-full'} top-0 ${isMobile ? 'mt-8' : 'ml-3'} flex flex-col gap-3 bg-neutral-900 border border-white/10 p-3 rounded-sm shadow-2xl z-50 min-w-[165px]`}>
           <span className="text-[7px] text-neutral-500 font-black uppercase tracking-[0.2em] mb-1">Theme Lab</span>
           <div className="space-y-2">
             {[{ label: 'BG', key: 'bg' }, { label: 'PRI', key: 'primary' }, { label: 'BRD', key: 'border' }, { label: 'TXT', key: 'text' }, { label: 'ACC', key: 'muted' }].map((slot) => (
@@ -43,12 +43,6 @@ function ThemeLab({ customColors, onColorChange, onApplyPreset, theme, setTheme,
               </div>
             ))}
           </div>
-          <div className="pt-2 border-t border-white/5 flex gap-2 justify-between px-1">
-             <button onMouseDown={(e) => { e.stopPropagation(); onApplyPreset({bg:'#050505', primary:'#00ff88', border:'#113322', text:'#ffffff', muted:'#446655'}); }} className="w-3.5 h-3.5 bg-[#00ff88] rounded-full hover:scale-125 transition-transform border border-white/10" />
-             <button onMouseDown={(e) => { e.stopPropagation(); onApplyPreset({bg:'#000000', primary:'#3b82f6', border:'#1e3a8a', text:'#ffffff', muted:'#60a5fa'}); }} className="w-3.5 h-3.5 bg-[#3b82f6] rounded-full hover:scale-125 transition-transform border border-white/10" />
-             <button onMouseDown={(e) => { e.stopPropagation(); onApplyPreset({bg:'#0c0014', primary:'#a855f7', border:'#3b0764', text:'#f5f3ff', muted:'#8b5cf6'}); }} className="w-3.5 h-3.5 bg-[#a855f7] rounded-full hover:scale-125 transition-transform border border-white/10" />
-             <button onMouseDown={(e) => { e.stopPropagation(); onApplyPreset({bg:'#1a1c1e', primary:'#f97316', border:'#452b1f', text:'#ffffff', muted:'#94a3b8'}); }} className="w-3.5 h-3.5 bg-[#f97316] rounded-full hover:scale-125 transition-transform border border-white/10" />
-          </div>
         </div>
       )}
     </div>
@@ -59,7 +53,8 @@ function ThemeLab({ customColors, onColorChange, onApplyPreset, theme, setTheme,
 export function CalendarHeader({ currentDate, setCurrentDate, activeTowns = [], onMenuClick, setActiveTowns, ...props }: any) {
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
-  const { theme, setTheme } = useSidebarLogic({ ...props, setActiveTowns });
+  
+  const { theme, setTheme, scaled } = useSidebarLogic({ ...props, activeTowns, setActiveTowns });
 
   const [customColors, setCustomColors] = useState(() => {
     if (typeof window !== "undefined") {
@@ -73,7 +68,6 @@ export function CalendarHeader({ currentDate, setCurrentDate, activeTowns = [], 
     localStorage.setItem("local-bull-custom-theme", JSON.stringify(customColors));
   }, [customColors]);
 
-  // Root theme sync (Preserved)
   useEffect(() => {
     const root = document.documentElement;
     if (theme === 'custom') {
@@ -87,7 +81,6 @@ export function CalendarHeader({ currentDate, setCurrentDate, activeTowns = [], 
     }
   }, [customColors, theme]);
 
-  // Click outside picker (Updated)
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) setIsPickerOpen(false);
@@ -102,7 +95,6 @@ export function CalendarHeader({ currentDate, setCurrentDate, activeTowns = [], 
   };
 
   return (
-    // FIX: Background is now consistent with theme
     <div className="grid grid-cols-3 items-center p-6 border-b border-white/10 bg-[var(--bg-main)] sticky top-0 z-50">
       <div className="flex items-center gap-4 justify-start">
         <button onClick={onMenuClick} className="md:hidden text-[var(--primary)] font-bold text-[10px] border border-[var(--primary)]/50 px-2 py-1 uppercase">Menu</button>
@@ -114,7 +106,6 @@ export function CalendarHeader({ currentDate, setCurrentDate, activeTowns = [], 
       <div className="flex items-center justify-center gap-6 relative z-20">
         <button onClick={() => setCurrentDate(currentDate.subtract(1, "month"))} className="text-2xl text-neutral-500 hover:text-[var(--primary)] transition-colors font-light">&lt;</button>
         
-        {/* MONTH/YEAR PICKER INTEGRATION */}
         <div className="relative flex flex-col items-center text-center" ref={pickerRef}>
           <button 
             onClick={() => setIsPickerOpen(!isPickerOpen)} 
@@ -123,6 +114,24 @@ export function CalendarHeader({ currentDate, setCurrentDate, activeTowns = [], 
           >
             {currentDate.format("MMM YYYY")}
           </button>
+          
+          {/* LoCALs display adjusted to 10% smaller than before */}
+          <div className="flex flex-wrap justify-center gap-1.5 mt-2.5">
+            {activeTowns.map((town: string) => (
+              <span 
+                key={town} 
+                onClick={() => setActiveTowns?.(activeTowns.filter((t: string) => t !== town))}
+                style={{ 
+                  ...(scaled ? scaled(11.5) : { fontSize: '11.5px' }), // Reduced by 10% (13 -> 11.5)
+                  borderColor: 'var(--primary)', 
+                  color: 'var(--primary)' 
+                }} 
+                className="px-2 py-0.5 border font-bold uppercase cursor-pointer hover:bg-[var(--primary)] hover:text-[var(--bg-main)] transition-all truncate max-w-[130px]"
+              >
+                {town.replace(/-/g, ' ')}
+              </span>
+            ))}
+          </div>
           
           {isPickerOpen && (
             <MonthYearPicker 

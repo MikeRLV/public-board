@@ -100,10 +100,8 @@ export function Sidebar(props: any) {
         </div>
 
         <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar overflow-x-visible">
-          {/* LoCALs SECTION: Tightened spacing and centered dot housing */}
           <div className="flex flex-col mb-8" ref={LoCALPopRef} style={{ gap: `calc(0.4rem * var(--text-scale))` }}>
             <div className="flex items-center gap-2 cursor-pointer group w-fit overflow-visible" onClick={() => setShowPopularLoCALs(true)}>
-              {/* DOT HOUSING: Matched Trending logic to prevent clipping */}
               <div className="flex items-center justify-center w-6 h-6 overflow-visible shrink-0">
                 <div 
                    style={{ 
@@ -150,7 +148,10 @@ export function Sidebar(props: any) {
             hasLocation, 
             trendingTags: props.trendingTags, 
             toggleTag, 
-            scaled 
+            scaled,
+            // FIXED: Passing raw data with fallbacks. If your parent component
+            // passes the events using a totally different name, add it here!
+            hasEvents: props.events || props.filteredEvents || props.calendarEvents
           }} />
           
           <div className="h-10 shrink-0" />
@@ -158,7 +159,19 @@ export function Sidebar(props: any) {
           <FilterSection {...{ TagPopRef, filterMode, setFilterMode, activeTags, toggleTag, scaled }} />
         </div>
 
-        <ToggleSection {...{ props, activeTags, toggleTag, scaled, adjustScale }} />
+        <ToggleSection {...{ 
+          ...props, 
+          activeTags, 
+          toggleTag, 
+          scaled, 
+          adjustScale,
+          showAllEvents: props.showAllEvents,
+          setShowAllEvents: props.setShowAllEvents,
+          showSpam: props.showSpam,
+          setShowSpam: props.setShowSpam,
+          showAllAges: props.showAllAges,
+          setShowAllAges: props.setShowAllAges
+        }} />
 
         <Tooltip triggerRef={helpTriggerRef} isOpen={showHelp}>
            <p style={scaled(11)} className="leading-relaxed text-[var(--text-main)] normal-case font-sans italic relative z-20">
