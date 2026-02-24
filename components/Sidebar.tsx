@@ -10,6 +10,7 @@ import { LocationBucketModal } from "./LocationBucketModal";
 import { TrendingSection } from "./TrendingSection";
 import { FilterSection } from "./FilterSection";
 import { ToggleSection } from "./ToggleSection";
+import { BrandLogo } from "./BrandLogo"; // <-- Added Logo Import
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -24,9 +25,6 @@ export function Sidebar(props: any) {
   const [showHelp, setShowHelp] = useState(false);
   const [showPopularLoCALs, setShowPopularLoCALs] = useState(false);
   const [dbWeightedTowns, setDbWeightedTowns] = useState<any[]>([]);
-  
-  // FIXED: Removed the local [filterMode, setFilterMode] state from here! 
-  // It was "shadowing" the props and preventing the calendar from updating.
   
   const helpTriggerRef = useRef<HTMLDivElement>(null);
   const LoCALPopRef = useRef<HTMLDivElement>(null);
@@ -85,13 +83,21 @@ export function Sidebar(props: any) {
           fontSize: `calc(1rem * ${textScale})`,
           color: 'var(--text-main)'
         } as any}
-        className={`fixed md:sticky top-0 left-0 z-[80] md:z-0 w-64 h-[100dvh] border-r p-4 flex flex-col font-mono transition-all duration-300 overflow-hidden ${props.isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
+        className={`fixed md:sticky top-0 left-0 z-[80] md:z-0 w-64 h-[100dvh] border-r p-4 flex flex-col font-mono transition-all duration-300 ${props.isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
       >
-        <div className="flex flex-col gap-4 shrink-0 mb-4">
+        <div className="flex flex-col gap-4 shrink-0">
           <button onClick={props.onClose} style={scaled(11)} className="md:hidden self-end text-neutral-500 uppercase tracking-widest">Close X</button>
-          <h1 style={scaled(22)} className="font-bold tracking-tighter leading-none whitespace-nowrap text-[var(--primary)]">
-            B L<span className="lowercase">o</span>CAL
-          </h1>
+          
+          {/* FIXED: Wrapped title and logo in a flex container with justify-between */}
+          <div className="flex items-center justify-between w-full">
+            <h1 style={scaled(22)} className="font-bold tracking-tighter leading-none whitespace-nowrap text-[var(--primary)]">
+              B L<span className="lowercase">o</span>CAL
+            </h1>
+            
+            {/* Logo added here. Adjust w-8 h-8 if you want it bigger/smaller */}
+            <BrandLogo className="w-8 h-8 text-[var(--primary)] shrink-0" />
+          </div>
+
           <button 
             onClick={props.onAddEvent} 
             style={{ ...scaled(13), backgroundColor: 'var(--primary)', color: 'var(--bg-main)' }} 
@@ -101,7 +107,7 @@ export function Sidebar(props: any) {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar overflow-x-visible">
+        <div className="flex-1 overflow-y-auto pr-1 -ml-6 pl-6 pt-4 overflow-x-hidden custom-scrollbar">
           <div className="flex flex-col mb-8" ref={LoCALPopRef} style={{ gap: `calc(0.4rem * var(--text-scale))` }}>
             <div className="flex items-center gap-2 cursor-pointer group w-fit overflow-visible" onClick={() => setShowPopularLoCALs(true)}>
               <div className="flex items-center justify-center w-6 h-6 overflow-visible shrink-0">
@@ -156,7 +162,6 @@ export function Sidebar(props: any) {
           
           <div className="h-10 shrink-0" />
 
-          {/* FIXED: Hooked this directly to `props` so it communicates with the calendar hook */}
           <FilterSection {...{ 
             TagPopRef, 
             filterMode: props.filterMode, 

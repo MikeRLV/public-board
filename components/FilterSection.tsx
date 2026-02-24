@@ -32,19 +32,18 @@ export function FilterSection({
 
       // Query the 'tags' table for names that match what the user is typing
       const { data, error } = await supabase
-        .from('tags') // <-- Change this if your table is named differently
-        .select('name') // <-- Change this if your column is named differently
+        .from('tags') 
+        .select('name') 
         .ilike('name', `%${search}%`)
-        .limit(10); // Limit to 10 so the dropdown doesn't get massive
+        .limit(10); 
 
       if (!error && data) {
-        // Get the names and filter out any tags the user already has active
         const returnedTags = data.map((t: any) => t.name.toLowerCase());
         setFetchedTags(returnedTags.filter(tag => !activeTags.includes(tag)));
       }
     };
 
-    // 150ms debounce: twice as fast, feels instant but still protects your database
+    // 150ms debounce
     const delayDebounceFn = setTimeout(() => {
       fetchTags();
     }, 150);
@@ -67,14 +66,28 @@ export function FilterSection({
 
   return (
     <div className="space-y-4 pb-4" ref={TagPopRef}>
+      
+      {/* HEADER SECTION - Toggle moved back here with space-between */}
       <div className="flex items-center justify-between border-t border-white/10 pt-4">
-        <div style={scaled(11)} className="font-bold text-neutral-500 uppercase">Filters</div>
         
-        {/* SCALING TOGGLE */}
+        {/* Left Side: Blinking light + Text */}
+        <div className="flex items-center gap-2 w-fit overflow-visible select-none pointer-events-none">
+          <div className="flex items-center justify-center w-6 h-6 overflow-visible shrink-0">
+            <div 
+              style={{ width: `calc(0.625rem * var(--text-scale))`, height: `calc(0.625rem * var(--text-scale))` }}
+              className="rounded-full bg-green-500 shadow-[0_0_12px_#22c55e] animate-pulse" 
+            />
+          </div>
+          <span style={{ color: 'var(--primary)' }} className="font-bold opacity-50 uppercase">
+            Filters
+          </span>
+        </div>
+
+        {/* Right Side: SCALING TOGGLE */}
         <button 
           onClick={() => setFilterMode(filterMode === 'AND' ? 'OR' : 'AND')} 
           style={{ fontSize: `calc(${scaled(10.5).fontSize} * 0.9)` } as any}
-          className="flex items-center border border-neutral-700 rounded-sm overflow-hidden"
+          className="flex items-center border border-neutral-700 rounded-sm overflow-hidden shrink-0"
         >
           <div className={`px-2.5 py-1 font-bold transition-colors ${filterMode === 'AND' ? 'bg-[var(--primary)] text-black' : 'text-neutral-500'}`}>
             AND
@@ -85,7 +98,7 @@ export function FilterSection({
         </button>
       </div>
 
-      {/* INPUT & DROPDOWN WRAPPER */}
+      {/* INPUT & DROPDOWN WRAPPER - Back to taking full width on its own line */}
       <div className="relative">
         <input 
           placeholder="+ Add tag" 

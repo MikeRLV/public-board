@@ -4,10 +4,11 @@ import dayjs from "dayjs";
 import localeData from "dayjs/plugin/localeData";
 import { useSidebarLogic } from "../hooks/useSidebarLogic";
 import { MonthYearPicker } from "./MonthYearPicker";
+import { BrandLogo } from "./BrandLogo"; 
 
 dayjs.extend(localeData);
 
-// 1. THEME LAB - Defined first to prevent ReferenceError
+// 1. THEME LAB
 function ThemeLab({ customColors, onColorChange, onApplyPreset, theme, setTheme, isMobile }: any) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -95,14 +96,35 @@ export function CalendarHeader({ currentDate, setCurrentDate, activeTowns = [], 
   };
 
   return (
-    <div className="grid grid-cols-3 items-center p-6 border-b border-white/10 bg-[var(--bg-main)] sticky top-0 z-50">
-      <div className="flex items-center gap-4 justify-start">
-        <button onClick={onMenuClick} className="md:hidden text-[var(--primary)] font-bold text-[10px] border border-[var(--primary)]/50 px-2 py-1 uppercase">Menu</button>
+    <div className="grid grid-cols-3 items-center p-6 border-b border-white/10 bg-[var(--bg-main)] sticky top-0 z-50 min-h-[130px]">
+      
+      {/* LEFT COLUMN: Multi-Trigger Logo Section */}
+      <div className="flex flex-col items-start justify-center h-full relative pl-2">
+        {/* Branding Trigger: Linked to onMenuClick with the same positioning as before */}
+        <button 
+          onClick={onMenuClick}
+          className="md:hidden absolute font-black tracking-tighter leading-none text-[var(--primary)] whitespace-nowrap pt-1 outline-none text-left"
+          style={{ fontSize: '22px', left: '-20px', top: '-8px' }}
+        >
+          B L<span className="lowercase">o</span>CAL
+        </button>
+
+        {/* Circular button CENTERED vertically with the arrows */}
+        <div className="flex h-full items-center">
+            <button 
+              onClick={onMenuClick} 
+              className="md:hidden flex items-center justify-center w-[46px] h-[46px] shrink-0 aspect-square rounded-full border border-[var(--primary)]/50 text-[var(--primary)] transition-all hover:scale-105 active:scale-95 hover:bg-[var(--primary)]/10 p-0"
+            >
+              <BrandLogo className="w-7 h-7 shrink-0" />
+            </button>
+        </div>
+        
         <div className="hidden md:flex">
           <ThemeLab customColors={customColors} onColorChange={handleColorChange} onApplyPreset={setCustomColors} theme={theme} setTheme={setTheme} />
         </div>
       </div>
 
+      {/* CENTER COLUMN: Date Picker */}
       <div className="flex items-center justify-center gap-6 relative z-20">
         <button onClick={() => setCurrentDate(currentDate.subtract(1, "month"))} className="text-2xl text-neutral-500 hover:text-[var(--primary)] transition-colors font-light">&lt;</button>
         
@@ -115,14 +137,13 @@ export function CalendarHeader({ currentDate, setCurrentDate, activeTowns = [], 
             {currentDate.format("MMM YYYY")}
           </button>
           
-          {/* LoCALs display adjusted to 10% smaller than before */}
           <div className="flex flex-wrap justify-center gap-1.5 mt-2.5">
             {activeTowns.map((town: string) => (
               <span 
                 key={town} 
                 onClick={() => setActiveTowns?.(activeTowns.filter((t: string) => t !== town))}
                 style={{ 
-                  ...(scaled ? scaled(11.5) : { fontSize: '11.5px' }), // Reduced by 10% (13 -> 11.5)
+                  ...(scaled ? scaled(11.5) : { fontSize: '11.5px' }), 
                   borderColor: 'var(--primary)', 
                   color: 'var(--primary)' 
                 }} 
@@ -148,7 +169,8 @@ export function CalendarHeader({ currentDate, setCurrentDate, activeTowns = [], 
         <button onClick={() => setCurrentDate(currentDate.add(1, "month"))} className="text-2xl text-neutral-500 hover:text-[var(--primary)] transition-colors font-light">&gt;</button>
       </div>
 
-      <div className="flex justify-end pr-2">
+      {/* RIGHT COLUMN */}
+      <div className="flex justify-end pr-2 h-full items-center">
         <div className="text-[8px] text-neutral-800 font-black uppercase tracking-widest vertical-rl rotate-180 hidden md:block">LoCAL Bull</div>
         <div className="flex md:hidden">
           <ThemeLab customColors={customColors} onColorChange={handleColorChange} onApplyPreset={setCustomColors} theme={theme} setTheme={setTheme} isMobile />
