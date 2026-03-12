@@ -8,30 +8,37 @@ import { Sidebar } from "./Sidebar";
 import { CalendarHeader } from "./CalendarHeader";
 import { CalendarGrid } from "./CalendarGrid";
 import { DayDetailsModal } from "./DayDetailsModal";
+import { TutorialOverlay } from "./TutorialOverlay";
 import { PostEventModal } from "./PostEventModal";
-import { TrendingModal } from "./TrendingModal";
-import { LocationBucketModal } from "./LocationBucketModal";
+import { BrowseModal } from "./BrowseModal";
 import { BANNED_WORDS_SET } from "../lib/bannedWords";
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
 
-export function CalendarLogic({ city }: { city: string }) {
+export function CalendarLogic({ city, initialLocals = [], initialTags = [] }: { city: string; initialLocals?: string[]; initialTags?: string[] }) {
   const router = useRouter();
   const [currentDate, setCurrentDate] = useState(dayjs());
   const [activeDay, setActiveDay] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
-  const [isTrendingModalOpen, setIsTrendingModalOpen] = useState(false);
-  const [isBucketModalOpen, setIsBucketModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
+  // BrowseModal unified state
+  const [isBrowseOpen, setIsBrowseOpen] = useState(false);
+  const [browseType, setBrowseType] = useState<'locals' | 'trending' | 'all-tags'>('locals');
+
+  const openBrowse = (type: 'locals' | 'trending' | 'all-tags') => {
+    setBrowseType(type);
+    setIsBrowseOpen(true);
+  };
+
   const {
-    userId, events, filteredEvents, weightedTags, weightedLocals, 
+    userId, events, filteredEvents, weightedTags, weightedLocals, allTimeTags,
     savedLocations, activeTags, setActiveTags,
     activeTowns, setActiveTowns, filterMode, setFilterMode, showAllEvents, setShowAllEvents,
     showSpam, setShowSpam, showAllAges, setShowAllAges, show18, setShow18, show21, setShow21, 
     slugify, fetchEvents
-  } = useCalendarData(city, currentDate);
+  } = useCalendarData(city, currentDate, initialLocals, initialTags);
 
   const [formState, setFormState] = useState({
     title: "", town: "", place: "", price: "", desc: "", date: "", tags: "", image: null as File | null,
@@ -40,7 +47,6 @@ export function CalendarLogic({ city }: { city: string }) {
 
   const todayStr = useMemo(() => dayjs().format('YYYY-MM-DD'), []);
 
-  // --- POST LOGIC FOR ARRAY BUCKETS ---
   const handlePostSubmit = async () => {
     if (isUploading || !formState.image || !formState.town) return;
 
@@ -105,8 +111,9 @@ export function CalendarLogic({ city }: { city: string }) {
         filterMode={filterMode} 
         setFilterMode={setFilterMode} 
         trendingTags={weightedTags} 
-        onTrendingClick={() => setIsTrendingModalOpen(true)} 
-        onBucketClick={() => setIsBucketModalOpen(true)} 
+        onTrendingClick={() => openBrowse('trending')}
+        onBucketClick={() => openBrowse('locals')}
+        onTagsClick={() => openBrowse('all-tags')}
         showAllEvents={showAllEvents} 
         setShowAllEvents={setShowAllEvents} 
         showSpam={showSpam} 
@@ -120,13 +127,11 @@ export function CalendarLogic({ city }: { city: string }) {
         onAddEvent={() => setIsPostModalOpen(true)} 
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
-        
         filteredEvents={filteredEvents} 
-        // FIXED: Only check the raw 'events' array to determine if the month has data
         hasEventsThisMonth={events && events.length > 0}
       />
       
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
+      <div className="flex-1 flex flex-col h-screen overflow-visible">
         <CalendarHeader 
           currentDate={currentDate} 
           setCurrentDate={setCurrentDate} 
@@ -138,9 +143,7 @@ export function CalendarLogic({ city }: { city: string }) {
         />
         
         {activeTowns.length === 0 && !city ? (
-          <div className="flex-1 flex flex-col items-center justify-center p-10 text-center bg-neutral-900/20">
-            <h2 className="text-4xl font-black text-[var(--primary)] uppercase tracking-tighter leading-none">No LoCAL Selected</h2>
-          </div>
+          <TutorialOverlay />
         ) : (
           <CalendarGrid 
             currentDate={currentDate} 
@@ -157,7 +160,38 @@ export function CalendarLogic({ city }: { city: string }) {
             activeDay={activeDay} 
             events={filteredEvents} 
             onClose={() => setActiveDay(null)} 
-            onVote={fetchEvents} 
+            onVote={async (flyerId: string, tagName: string, voteVal: number) => {
+              if (!flyerId || !tagName) { fetchEvents(); return; }
+
+              const userId = localStorage.getItem("local_user_id");
+
+              // Spam is always single flyer, no lock
+              if (tagName === 'spam') {
+                await supabase.rpc('vote_on_tag', { target_flyer_id: flyerId, target_tag_name: 'spam', vote_val: 1, voter_id: userId });
+                fetchEvents();
+                return;
+              }
+
+              const thisEvent = filteredEvents.find((e: any) => e.id === flyerId);
+              if (!thisEvent) return;
+
+              const lockKey = `voted:${thisEvent.title.toLowerCase()}:${tagName}`;
+              const prevVote = localStorage.getItem(lockKey);
+
+              // Block if already voted the same direction
+              if (prevVote !== null && parseInt(prevVote) === voteVal) return;
+
+              // Send raw voteVal — the RPC tracks per-voter and handles its own delta
+              await supabase.rpc('vote_on_tag', {
+                target_flyer_id: flyerId,
+                target_tag_name: tagName,
+                vote_val: voteVal,
+                voter_id: userId
+              });
+
+              localStorage.setItem(lockKey, voteVal.toString());
+              fetchEvents();
+            }}
             weightedTags={weightedTags} 
             onPostClick={() => setIsPostModalOpen(true)} 
           />
@@ -174,21 +208,19 @@ export function CalendarLogic({ city }: { city: string }) {
           weightedTags={weightedTags} 
           weightedLocals={weightedLocals} 
         />
-        
-        <TrendingModal 
-          isOpen={isTrendingModalOpen} 
-          onClose={() => setIsTrendingModalOpen(false)} 
-          weightedTags={weightedTags} 
-          activeTags={activeTags} 
-          setActiveTags={setActiveTags} 
-        />
-        
-        <LocationBucketModal 
-          isOpen={isBucketModalOpen} 
-          onClose={() => setIsBucketModalOpen(false)} 
-          savedLocations={savedLocations} 
-          activeTowns={activeTowns} 
-          onAddTown={(loc: string) => setActiveTowns([...activeTowns, slugify(loc)])} 
+
+        <BrowseModal
+          isOpen={isBrowseOpen}
+          onClose={() => setIsBrowseOpen(false)}
+          type={browseType}
+          weightedLocals={weightedLocals}
+          activeTowns={activeTowns}
+          onAddTown={(loc: string) => setActiveTowns([...activeTowns, slugify(loc)])}
+          onRemoveTown={(loc: string) => setActiveTowns(activeTowns.filter(t => t !== loc))}
+          weightedTags={weightedTags}
+          allTimeTags={allTimeTags ?? []}
+          activeTags={activeTags}
+          setActiveTags={setActiveTags}
         />
       </div>
     </div>

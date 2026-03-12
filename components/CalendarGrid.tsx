@@ -1,6 +1,9 @@
 "use client";
 import dayjs from "dayjs";
+import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
 import { useMemo } from "react";
+
+dayjs.extend(isSameOrBefore);
 
 interface GridProps {
   currentDate: dayjs.Dayjs;
@@ -15,13 +18,22 @@ export function CalendarGrid({ currentDate, todayStr, activeDay, setActiveDay, f
   const startOffset = currentDate.startOf("month").day();
   const daysInMonth = currentDate.daysInMonth();
 
-  // Group events by day string for efficient lookup
+  // Group events by day — multi-day events populate every day in their range
   const eventsByDay = useMemo(() => {
     const map: Record<string, any[]> = {};
     filteredEvents.forEach((event) => {
-      const d = dayjs(event.event_start).format("YYYY-MM-DD");
-      if (!map[d]) map[d] = [];
-      map[d].push(event);
+      const start = dayjs(event.event_start);
+      const end = event.event_end ? dayjs(event.event_end) : start;
+      let current = start;
+      while (current.isSameOrBefore(end, 'day')) {
+        const d = current.format("YYYY-MM-DD");
+        if (!map[d]) map[d] = [];
+        // Avoid duplicating the same event on the same day
+        if (!map[d].find((e: any) => e.id === event.id)) {
+          map[d].push(event);
+        }
+        current = current.add(1, 'day');
+      }
     });
     return map;
   }, [filteredEvents]);
@@ -48,11 +60,14 @@ export function CalendarGrid({ currentDate, todayStr, activeDay, setActiveDay, f
           const isToday = dateStr === todayStr;
           const events = eventsByDay[dateStr] || [];
 
+          // Separate single-day and multi-day events for visual distinction
+          const multiDayEvents = events.filter((e: any) => !!e.event_end);
+          const singleDayEvents = events.filter((e: any) => !e.event_end);
+
           return (
             <div
               key={dateStr}
               onClick={() => { if (city) setActiveDay(dateStr); }}
-              // Theme variables used for Borders, BG, and Hover states
               className={`border p-1 min-h-[80px] md:min-h-[120px] cursor-pointer transition relative flex flex-col
                 ${activeDay === dateStr 
                   ? "bg-[var(--primary)]/10 border-[var(--primary)] z-10" 
@@ -66,12 +81,21 @@ export function CalendarGrid({ currentDate, todayStr, activeDay, setActiveDay, f
                 {isToday && <span className="ml-1 text-[8px] uppercase tracking-tighter opacity-70">Today</span>}
               </div>
 
-              {/* DESKTOP VIEW: Max 5 events + ellipses */}
+              {/* DESKTOP VIEW */}
               <div className="hidden md:flex flex-col gap-1 mt-1 overflow-hidden">
-                {events.slice(0, 5).map((e) => (
+                {/* Multi-day events shown first with a distinct style */}
+                {multiDayEvents.slice(0, 3).map((e: any) => (
+                  <div 
+                    key={`multi-${e.id}`} 
+                    className="text-[9px] truncate border-l-2 pl-1 border-[var(--primary)] bg-[var(--primary)]/10 leading-tight uppercase font-bold text-[var(--primary)]/90 whitespace-nowrap"
+                  >
+                    {e.title || e.location_name}
+                  </div>
+                ))}
+                {/* Single-day events */}
+                {singleDayEvents.slice(0, Math.max(0, 5 - multiDayEvents.length)).map((e: any) => (
                   <div 
                     key={e.id} 
-                    // Event borders now match the primary theme color
                     className="text-[9px] truncate border-l-2 pl-1 border-[var(--primary)]/60 leading-tight uppercase font-bold text-[var(--text-main)]/90 whitespace-nowrap"
                   >
                     {e.title || e.location_name}

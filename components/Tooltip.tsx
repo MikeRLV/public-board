@@ -17,8 +17,8 @@ export function Tooltip({ children, triggerRef, isOpen }: TooltipProps) {
     if (isOpen && triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
       setCoords({
-        top: rect.top + window.scrollY,
-        left: rect.right + 12,
+        top: rect.bottom + 8,
+        left: 4, // flush to sidebar left edge
       });
     }
   }, [isOpen, triggerRef]);
@@ -31,16 +31,17 @@ export function Tooltip({ children, triggerRef, isOpen }: TooltipProps) {
         position: 'fixed',
         top: `${coords.top}px`,
         left: `${coords.left}px`,
-        backgroundColor: "#000000", 
+        backgroundColor: "#000000",
         zIndex: 999999,
         opacity: 1,
+        width: '248px',
       }}
-      // REMOVED: animate-in fade-in duration-150
-      className="w-64 p-4 border border-[var(--primary)] rounded-sm shadow-[0_0_50px_rgba(0,0,0,1)] pointer-events-none"
+      className="p-4 border border-[var(--primary)] rounded-sm shadow-[0_0_50px_rgba(0,0,0,1)] pointer-events-none"
     >
-      <div 
-        style={{ backgroundColor: "#000000" }} 
-        className="absolute left-0 top-3 -ml-[5px] w-2.5 h-2.5 border-l border-b border-[var(--primary)] rotate-45 z-10" 
+      {/* Arrow points up toward the ? button at top-right */}
+      <div
+        style={{ backgroundColor: "#000000", right: '10px' }}
+        className="absolute -top-[5px] w-2.5 h-2.5 border-r border-t border-[var(--primary)] -rotate-45 z-10"
       />
       <div className="relative z-20">
         {children}

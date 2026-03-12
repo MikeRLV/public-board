@@ -8,19 +8,19 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-export function useCalendarData(city: string, currentDate: dayjs.Dayjs) {
+export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialLocals: string[] = [], initialTags: string[] = []) {
   const [events, setEvents] = useState<any[]>([]);
   const [userId, setUserId] = useState<string>("");
   const [weightedTags, setWeightedTags] = useState<{name: string, weight: number}[]>([]);
   const [weightedLocals, setWeightedLocals] = useState<{name: string, weight: number}[]>([]); 
   const [savedLocations, setSavedLocations] = useState<string[]>([]);
+  const [allTimeTags, setAllTimeTags] = useState<{name: string, count: number}[]>([]);
   
-  const [activeTags, setActiveTags] = useState<string[]>([]);
-  const [activeTowns, setActiveTowns] = useState<string[]>([]);
+  const [activeTags, setActiveTags] = useState<string[]>(initialTags);
+  const [activeTowns, setActiveTowns] = useState<string[]>(initialLocals);
   const [filterMode, setFilterMode] = useState<'OR' | 'AND'>('OR');
   const [showAllEvents, setShowAllEvents] = useState(false);
   const [showSpam, setShowSpam] = useState(false);
-
   const [showAllAges, setShowAllAges] = useState(false);
   const [show18, setShow18] = useState(false);
   const [show21, setShow21] = useState(false);
@@ -28,7 +28,43 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs) {
   const slugify = (text: string) => 
     text.toLowerCase().trim().replace(/[\s_]+/g, "-").replace(/[^\w-+]+/g, "").replace(/--+/g, "-").replace(/^-+|-+$/g, "");
 
-  // --- RECOVERY LOGIC: MONTHLY POOLS + GLOBAL FALLBACK ---
+  // All locals — always fetched on mount, never gated on selection
+  useEffect(() => {
+    const fetchLocals = async () => {
+      const { data } = await supabase.from('weighted_locals').select('name, weight').order('weight', { ascending: false });
+      if (data) {
+        setWeightedLocals(data);
+        setSavedLocations(data.map((item: any) => item.name));
+      }
+    };
+    fetchLocals();
+  }, []);
+
+  // All-time tags: fetched once on mount, used by BrowseModal 'all-tags' view
+  useEffect(() => {
+    const fetchAllTimeTags = async () => {
+      const { data, error } = await supabase
+        .from('flyer_tags')
+        .select('vote_count, tags(name)');
+
+      if (!error && data) {
+        const counts: Record<string, number> = {};
+        data.forEach((ft: any) => {
+          const name = ft.tags?.name;
+          if (name && slugify(name) !== 'spam') {
+            const key = slugify(name);
+            counts[key] = (counts[key] || 0) + (ft.vote_count || 0);
+          }
+        });
+        const sorted = Object.entries(counts)
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => b.count - a.count);
+        setAllTimeTags(sorted);
+      }
+    };
+    fetchAllTimeTags();
+  }, []);
+
   const fetchPools = async () => {
     const start = currentDate.startOf('month').toISOString();
     const end = currentDate.endOf('month').toISOString();
@@ -41,7 +77,6 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs) {
     }
 
     try {
-      // 1. ATTEMPT: Fetch tags for specific month/city bucket
       const { data: monthFlyers } = await supabase
         .from('flyers')
         .select('flyer_tags(vote_count, tags(name)), city_slug')
@@ -63,7 +98,6 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs) {
         });
       }
 
-      // 2. RECOVERY FALLBACK: If monthly found nothing, pull from the global tag table
       if (Object.keys(tagCounts).length === 0) {
         const { data: globalTags } = await supabase
           .from('flyer_tags')
@@ -87,18 +121,10 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs) {
     } catch (err) {
       console.error("Pool fetch failed:", err);
     }
-
-    // Always refresh weighted LoCALs for sidebar buckets
-    const { data: localData } = await supabase.from('weighted_locals').select('name, weight').order('weight', { ascending: false });
-    if (localData) {
-      setWeightedLocals(localData);
-      setSavedLocations(localData.map(item => item.name));
-    }
   };
 
   useEffect(() => { fetchPools(); }, [currentDate, city, activeTowns, events]); 
 
-  // --- Tag Sync Logic ---
   useEffect(() => {
     let current = [...activeTags];
     let changed = false;
@@ -176,9 +202,10 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs) {
 
   return {
     userId, 
-    events, // <--- EXPORTING THIS MAKES IT ALL WORK
+    events,
     filteredEvents, 
-    weightedTags, 
+    weightedTags,
+    allTimeTags,
     weightedLocals,
     savedLocations, activeTags, setActiveTags,
     activeTowns, setActiveTowns, filterMode, setFilterMode, showAllEvents, setShowAllEvents,
