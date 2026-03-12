@@ -17,7 +17,7 @@ const supabase = createClient(
 
 // ── Portal dropdown for LoCALs (no counts) ────────────────────────────────────
 function LocalsDropdown({ inputRef, suggestions, onSelect, visible }: {
-  inputRef: React.RefObject<HTMLInputElement>;
+  inputRef: React.RefObject<HTMLInputElement | null>;
   suggestions: string[];
   onSelect: (s: string) => void;
   visible: boolean;

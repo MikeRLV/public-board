@@ -10,7 +10,7 @@ const supabase = createClient(
 
 // ── Portal dropdown ───────────────────────────────────────────────────────────
 function PortalDropdown({ inputRef, suggestions, onSelect, visible }: {
-  inputRef: React.RefObject<HTMLInputElement>;
+  inputRef: React.RefObject<HTMLInputElement | null>;
   suggestions: { name: string; count?: number }[];
   onSelect: (s: string) => void;
   visible: boolean;
