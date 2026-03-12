@@ -47,7 +47,7 @@ export function TutorialOverlay() {
             className="border rounded-sm px-6 py-5 opacity-80">
             <p style={{ color: 'var(--primary)', fontSize: 'calc(14px * var(--text-scale, 1))' }}
               className="font-black uppercase tracking-tighter leading-relaxed">
-              Click on the Bee Hive above to open the sidebar. You can sort LoCAL calendars by either clicking or filling in an area. A LoCAL can be entered, but will not exist until an event is posted.
+              Click on the Bee-Hive above to open the sidebar. You can sort LoCAL calendars by either clicking or filling in an area. A LoCAL can be entered, but will not populate events until something is posted.
             </p>
           </div>
         </div>
