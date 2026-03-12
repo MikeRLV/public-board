@@ -13,7 +13,7 @@ export function TutorialOverlay() {
           <p style={{ color: 'var(--primary)', fontSize: 'calc(16px * var(--text-scale, 1))' }}
             className="font-black uppercase tracking-tighter leading-relaxed">
             Pick a LoCAL to populate a calendar. If you know of one you can enter it directly, or click on{' '}
-            <span className="underline">LoCALs</span> to see what's available. A LoCAL won't exist until an event is posted to it first.
+            <span className="underline">LoCALs</span> to see what's available. A LoCAL won't populate on the LoCAL list until an event is posted to it first.
           </p>
         </div>
       </div>
