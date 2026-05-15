@@ -1,8 +1,6 @@
 "use client";
 
-export function TrendingSection({ hasLocation, trendingTags, toggleTag, scaled, hasEvents }: any) {
-  // FOOLPROOF CHECK: Safely handles undefined, false, or an empty array 
-  // without accidentally hiding your tags if a prop gets dropped.
+export function TrendingSection({ hasLocation, trendingTags, toggleTag, scaled, hasEvents, onTrendingClick }: any) {
   const isMonthEmpty = hasEvents === false || (Array.isArray(hasEvents) && hasEvents.length === 0);
   const tags = isMonthEmpty ? [] : (trendingTags || []);
   
@@ -11,14 +9,17 @@ export function TrendingSection({ hasLocation, trendingTags, toggleTag, scaled, 
       style={{ gap: `calc(0.4rem * var(--text-scale))` }}
       className={`flex flex-col transition-opacity ${!hasLocation ? 'opacity-20 pointer-events-none' : ''}`}
     >
-      <div className="flex items-center gap-2 w-fit overflow-visible select-none pointer-events-none">
+      <div
+        className="flex items-center gap-2 w-fit overflow-visible cursor-pointer group"
+        onClick={onTrendingClick}
+      >
         <div className="flex items-center justify-center w-6 h-6 overflow-visible shrink-0">
           <div 
             style={{ width: `calc(0.625rem * var(--text-scale))`, height: `calc(0.625rem * var(--text-scale))` }}
-            className="rounded-full bg-red-600 shadow-[0_0_12px_#dc2626] animate-pulse" 
+            className="rounded-full bg-red-600 shadow-[0_0_12px_#dc2626] animate-pulse group-hover:scale-150 transition-transform" 
           />
         </div>
-        <span style={{ color: 'var(--primary)' }} className="font-bold opacity-50 uppercase">
+        <span style={{ color: 'var(--primary)' }} className="font-bold opacity-50 group-hover:opacity-100 uppercase">
           Trending
         </span>
       </div>
