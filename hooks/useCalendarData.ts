@@ -8,32 +8,69 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-export function useCalendarData(city: string, currentDate: dayjs.Dayjs) {
+export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialLocals: string[] = [], initialTags: string[] = []) {
+  const slugify = (text: string) => 
+    text.toLowerCase().trim().replace(/[\s_]+/g, "-").replace(/[^\w-+]+/g, "").replace(/--+/g, "-").replace(/^-+|-+$/g, "");
+
   const [events, setEvents] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [userId, setUserId] = useState<string>("");
   const [weightedTags, setWeightedTags] = useState<{name: string, weight: number}[]>([]);
   const [weightedLocals, setWeightedLocals] = useState<{name: string, weight: number}[]>([]); 
   const [savedLocations, setSavedLocations] = useState<string[]>([]);
+  const [allTimeTags, setAllTimeTags] = useState<{name: string, count: number}[]>([]);
   
-  const [activeTags, setActiveTags] = useState<string[]>([]);
-  const [activeTowns, setActiveTowns] = useState<string[]>([]);
+  const [activeTags, setActiveTags] = useState<string[]>(initialTags.map(t => slugify(t)));
+  const [activeTowns, setActiveTowns] = useState<string[]>(initialLocals.map(l => slugify(l)));
   const [filterMode, setFilterMode] = useState<'OR' | 'AND'>('OR');
   const [showAllEvents, setShowAllEvents] = useState(false);
   const [showSpam, setShowSpam] = useState(false);
-
   const [showAllAges, setShowAllAges] = useState(false);
   const [show18, setShow18] = useState(false);
   const [show21, setShow21] = useState(false);
 
-  const slugify = (text: string) => 
-    text.toLowerCase().trim().replace(/[\s_]+/g, "-").replace(/[^\w-+]+/g, "").replace(/--+/g, "-").replace(/^-+|-+$/g, "");
+  // All locals — always fetched on mount, never gated on selection
+  useEffect(() => {
+    const fetchLocals = async () => {
+      const { data } = await supabase.from('weighted_locals').select('name, weight').order('weight', { ascending: false });
+      if (data) {
+        setWeightedLocals(data);
+        setSavedLocations(data.map((item: any) => item.name));
+      }
+    };
+    fetchLocals();
+  }, []);
 
-  // --- RECOVERY LOGIC: MONTHLY POOLS + GLOBAL FALLBACK ---
+  // All-time tags: fetched once on mount, used by BrowseModal 'all-tags' view
+  useEffect(() => {
+    const fetchAllTimeTags = async () => {
+      const { data, error } = await supabase
+        .from('flyer_tags')
+        .select('vote_count, tags(name)');
+
+      if (!error && data) {
+        const counts: Record<string, number> = {};
+        data.forEach((ft: any) => {
+          const name = ft.tags?.name;
+          if (name && slugify(name) !== 'spam') {
+            const key = slugify(name);
+            counts[key] = (counts[key] || 0) + (ft.vote_count || 0);
+          }
+        });
+        const sorted = Object.entries(counts)
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => b.count - a.count);
+        setAllTimeTags(sorted);
+      }
+    };
+    fetchAllTimeTags();
+  }, []);
+
   const fetchPools = async () => {
-    const start = currentDate.startOf('month').toISOString();
-    const end = currentDate.endOf('month').toISOString();
+    const start = currentDate.startOf('month').format('YYYY-MM-DD');
+    const end = currentDate.endOf('month').format('YYYY-MM-DD');
     const citySlug = city ? slugify(city) : null;
-    const targetCities = Array.from(new Set([...activeTowns, citySlug].filter(Boolean)));
+    const targetCities = Array.from(new Set([...activeTowns, citySlug].filter((t): t is string => typeof t === 'string' && t.length > 0)));
 
     if (targetCities.length === 0) {
       setWeightedTags([]);
@@ -41,13 +78,13 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs) {
     }
 
     try {
-      // 1. ATTEMPT: Fetch tags for specific month/city bucket
+      const cityFilters = targetCities.map((t: string) => `city_slug.cs.{${t}}`).join(',');
       const { data: monthFlyers } = await supabase
         .from('flyers')
         .select('flyer_tags(vote_count, tags(name)), city_slug')
-        .or(`city_slug.cs.{${targetCities.join(',')}}`) 
+        .or(cityFilters)
         .gte('event_start', start)
-        .lte('event_start', end);
+        .lte('event_start', end + 'T23:59:59');
 
       let tagCounts: Record<string, number> = {};
 
@@ -63,7 +100,6 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs) {
         });
       }
 
-      // 2. RECOVERY FALLBACK: If monthly found nothing, pull from the global tag table
       if (Object.keys(tagCounts).length === 0) {
         const { data: globalTags } = await supabase
           .from('flyer_tags')
@@ -87,18 +123,10 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs) {
     } catch (err) {
       console.error("Pool fetch failed:", err);
     }
-
-    // Always refresh weighted LoCALs for sidebar buckets
-    const { data: localData } = await supabase.from('weighted_locals').select('name, weight').order('weight', { ascending: false });
-    if (localData) {
-      setWeightedLocals(localData);
-      setSavedLocations(localData.map(item => item.name));
-    }
   };
 
   useEffect(() => { fetchPools(); }, [currentDate, city, activeTowns, events]); 
 
-  // --- Tag Sync Logic ---
   useEffect(() => {
     let current = [...activeTags];
     let changed = false;
@@ -123,35 +151,91 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs) {
     setUserId(storedId);
   }, []);
 
-  const fetchEvents = async () => {
-    const start = currentDate.startOf('month').toISOString();
-    const end = currentDate.endOf('month').toISOString();
-    
-    let query = supabase
-      .from('flyers')
-      .select('*, flyer_tags(vote_count, tags(name))')
-      .gte('event_start', start)
-      .lte('event_start', end);
+  const syncTicketmaster = async (towns: string[], date: dayjs.Dayjs) => {
+    const month = date.format('YYYY-MM');
+    const targets = towns.length > 0 ? towns : city ? [slugify(city)] : [];
+    if (targets.length === 0) return;
 
-    const citySlug = city ? slugify(city) : null;
-    const allSearchTowns = Array.from(new Set([...activeTowns, citySlug].filter(Boolean)));
-
-    if (allSearchTowns.length > 0) {
-      query = query.or(`city_slug.cs.{${allSearchTowns.join(',')}}`);
-      const { data, error } = await query;
-      if (!error && data) setEvents(data);
-    } else { 
-      setEvents([]); 
-    }
+    await Promise.all(
+      targets.map(async (citySlug) => {
+        try {
+          const res = await fetch('/api/ticketmaster/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ citySlug, month }),
+          });
+          const d = await res.json();
+          console.log('TM sync:', d);
+        } catch (e) {
+          console.error('TM sync error:', e);
+        }
+      })
+    );
   };
 
-  useEffect(() => { fetchEvents(); }, [currentDate, city, activeTowns]);
+  const preSyncMonth = (towns: string[], date: dayjs.Dayjs) => {
+    const month = date.format('YYYY-MM');
+    const targets = towns.length > 0 ? towns : city ? [slugify(city)] : [];
+    targets.forEach(async (citySlug) => {
+      try {
+        await fetch('/api/ticketmaster/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ citySlug, month }),
+        });
+      } catch {}
+    });
+  };
+
+  const fetchEvents = async (cancelled = false) => {
+    setIsLoading(true);
+    const monthStart = currentDate.format('YYYY-MM-01');
+    const nextMonth = currentDate.add(1, 'month').format('YYYY-MM-01');
+
+    const citySlug = city ? slugify(city) : null;
+    const allSearchTowns = Array.from(new Set([...activeTowns, citySlug].filter((t): t is string => typeof t === 'string' && t.length > 0)));
+
+    if (allSearchTowns.length === 0) { setIsLoading(false); return; }
+
+    const cityFilters = allSearchTowns.map((t: string) => `city_slug.cs.{${t}}`).join(',');
+
+    const { data, error } = await supabase
+      .from('flyers')
+      .select('*, flyer_tags(vote_count, tags(name))')
+      .gte('event_start', monthStart)
+      .lt('event_start', nextMonth)
+      .or(cityFilters);
+
+    if (!cancelled && !error && data) setEvents(data);
+    if (!cancelled) setIsLoading(false);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const run = async () => {
+      await fetchEvents(cancelled);
+      if (cancelled) return;
+
+      preSyncMonth(activeTowns, currentDate.add(1, 'month'));
+      preSyncMonth(activeTowns, currentDate.add(2, 'month'));
+      preSyncMonth(activeTowns, currentDate.add(3, 'month'));
+
+      await syncTicketmaster(activeTowns, currentDate);
+      if (cancelled) return;
+
+      fetchEvents(cancelled);
+    };
+
+    run();
+    return () => { cancelled = true; };
+  }, [currentDate, city, activeTowns]);
 
   const filteredEvents = useMemo(() => {
     if (activeTowns.length === 0 && !city) return [];
     
     const citySlug = city ? slugify(city) : null;
-    const currentViewTowns = Array.from(new Set([...activeTowns, citySlug].filter(Boolean)));
+    const currentViewTowns = Array.from(new Set([...activeTowns, citySlug].filter((t): t is string => typeof t === 'string' && t.length > 0)));
 
     return events.filter((e: any) => {
       const eventSlugs = Array.isArray(e.city_slug) ? e.city_slug : [e.city_slug];
@@ -176,9 +260,11 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs) {
 
   return {
     userId, 
-    events, // <--- EXPORTING THIS MAKES IT ALL WORK
+    events,
+    isLoading,
     filteredEvents, 
-    weightedTags, 
+    weightedTags,
+    allTimeTags,
     weightedLocals,
     savedLocations, activeTags, setActiveTags,
     activeTowns, setActiveTowns, filterMode, setFilterMode, showAllEvents, setShowAllEvents,

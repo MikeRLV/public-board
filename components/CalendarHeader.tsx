@@ -26,7 +26,7 @@ function ThemeLab({ customColors, onColorChange, onApplyPreset, theme, setTheme,
       <button onMouseDown={(e) => e.stopPropagation()} onClick={() => setTheme('default')} className={`w-3.5 h-3.5 bg-yellow-500 border-2 ${theme === 'default' ? 'border-white' : 'border-transparent opacity-40'} hover:opacity-100 transition-all`} />
       <button onMouseDown={(e) => e.stopPropagation()} onClick={() => setTheme('cyberpunk')} className={`w-3.5 h-3.5 bg-pink-500 border-2 ${theme === 'cyberpunk' ? 'border-white' : 'border-transparent opacity-40'} hover:opacity-100 transition-all`} />
       <button onMouseDown={(e) => e.stopPropagation()} onClick={() => setTheme('minimalist')} className={`w-3.5 h-3.5 bg-neutral-500 border-2 ${theme === 'minimalist' ? 'border-white' : 'border-transparent opacity-40'} hover:opacity-100 transition-all`} />
-      <button onMouseDown={(e) => e.stopPropagation()} onClick={() => setTheme('custom')} style={{ backgroundColor: customColors.primary }} className={`w-3.5 h-3.5 border-2 ${theme === 'custom' ? 'border-white' : 'border-transparent opacity-40'} hover:opacity-100 transition-all`} />
+      <button onMouseDown={(e) => e.stopPropagation()} onClick={() => setTheme('custom')} style={{ backgroundColor: customColors.primary }} suppressHydrationWarning className={`w-3.5 h-3.5 border-2 ${theme === 'custom' ? 'border-white' : 'border-transparent opacity-40'} hover:opacity-100 transition-all`} />
       <button onMouseDown={(e) => e.stopPropagation()} onClick={() => setIsOpen(!isOpen)} className={`w-3.5 h-3.5 bg-neutral-800 border-2 flex items-center justify-center text-[8px] font-black ${isOpen ? 'border-white' : 'border-transparent opacity-40'} hover:opacity-100 transition-all text-white`}>?</button>
 
       {isOpen && (
@@ -51,7 +51,7 @@ function ThemeLab({ customColors, onColorChange, onApplyPreset, theme, setTheme,
 }
 
 // 2. MAIN HEADER
-export function CalendarHeader({ currentDate, setCurrentDate, activeTowns = [], onMenuClick, setActiveTowns, ...props }: any) {
+export function CalendarHeader({ currentDate, setCurrentDate, activeTowns = [], onMenuClick, setActiveTowns, onRefresh, ...props }: any) {
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
   
@@ -95,12 +95,16 @@ export function CalendarHeader({ currentDate, setCurrentDate, activeTowns = [], 
     if (theme !== 'custom') setTheme('custom');
   };
 
+  const handleRefresh = () => {
+    Object.keys(localStorage).filter(k => k.startsWith('tm_synced')).forEach(k => localStorage.removeItem(k));
+    onRefresh?.();
+  };
+
   return (
     <div className="grid grid-cols-3 items-center p-6 border-b border-white/10 bg-[var(--bg-main)] sticky top-0 z-50 min-h-[130px]">
       
-      {/* LEFT COLUMN: Multi-Trigger Logo Section */}
+      {/* LEFT COLUMN */}
       <div className="flex flex-col items-start justify-center h-full relative pl-2">
-        {/* Branding Trigger: Linked to onMenuClick with the same positioning as before */}
         <button 
           onClick={onMenuClick}
           className="md:hidden absolute font-black tracking-tighter leading-none text-[var(--primary)] whitespace-nowrap pt-1 outline-none text-left"
@@ -109,14 +113,13 @@ export function CalendarHeader({ currentDate, setCurrentDate, activeTowns = [], 
           B L<span className="lowercase">o</span>CAL
         </button>
 
-        {/* Circular button CENTERED vertically with the arrows */}
         <div className="flex h-full items-center">
-            <button 
-              onClick={onMenuClick} 
-              className="md:hidden flex items-center justify-center w-[46px] h-[46px] shrink-0 aspect-square rounded-full border border-[var(--primary)]/50 text-[var(--primary)] transition-all hover:scale-105 active:scale-95 hover:bg-[var(--primary)]/10 p-0"
-            >
-              <BrandLogo className="w-7 h-7 shrink-0" />
-            </button>
+          <button 
+            onClick={onMenuClick} 
+            className="md:hidden flex items-center justify-center w-[46px] h-[46px] shrink-0 aspect-square rounded-full border border-[var(--primary)]/50 text-[var(--primary)] transition-all hover:scale-105 active:scale-95 hover:bg-[var(--primary)]/10 p-0"
+          >
+            <BrandLogo className="w-7 h-7 shrink-0" />
+          </button>
         </div>
         
         <div className="hidden md:flex">
@@ -124,7 +127,7 @@ export function CalendarHeader({ currentDate, setCurrentDate, activeTowns = [], 
         </div>
       </div>
 
-      {/* CENTER COLUMN: Date Picker */}
+      {/* CENTER COLUMN */}
       <div className="flex items-center justify-center gap-6 relative z-20">
         <button onClick={() => setCurrentDate(currentDate.subtract(1, "month"))} className="text-2xl text-neutral-500 hover:text-[var(--primary)] transition-colors font-light">&lt;</button>
         
@@ -169,9 +172,14 @@ export function CalendarHeader({ currentDate, setCurrentDate, activeTowns = [], 
         <button onClick={() => setCurrentDate(currentDate.add(1, "month"))} className="text-2xl text-neutral-500 hover:text-[var(--primary)] transition-colors font-light">&gt;</button>
       </div>
 
-      {/* RIGHT COLUMN */}
+      {/* RIGHT COLUMN — secret refresh */}
       <div className="flex justify-end pr-2 h-full items-center">
-        <div className="text-[8px] text-neutral-800 font-black uppercase tracking-widest vertical-rl rotate-180 hidden md:block">LoCAL Bull</div>
+        <div
+          onClick={handleRefresh}
+          className="text-[8px] text-neutral-800 font-black uppercase tracking-widest vertical-rl rotate-180 hidden md:block cursor-pointer hover:text-neutral-600 transition-colors select-none"
+        >
+          LoCAL Bull
+        </div>
         <div className="flex md:hidden">
           <ThemeLab customColors={customColors} onColorChange={handleColorChange} onApplyPreset={setCustomColors} theme={theme} setTheme={setTheme} isMobile />
         </div>
