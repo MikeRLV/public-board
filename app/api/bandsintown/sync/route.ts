@@ -56,8 +56,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: 'no_events', citySlug, month });
     }
 
+    // Fetch existing Ticketmaster events for this city to deduplicate against
+    const { data: tmEvents } = await supabase
+      .from('flyers')
+      .select('title, event_start')
+      .eq('source', 'ticketmaster')
+      .contains('city_slug', [citySlug]);
+
+    // Normalize a string to bare alphanumeric for fuzzy comparison
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    // Extract performer name from BIT titles like "Artist @ Venue" or "Artist - Venue"
+    const performer = (title: string) => norm(title.split(/[@\-–]/)[0].trim());
+
+    const isDuplicate = (bitTitle: string, bitDate: string) => {
+      const perf = performer(bitTitle);
+      if (perf.length < 4) return false; // too short to match reliably
+      const day = bitDate.substring(0, 10);
+      return (tmEvents || []).some((tm: any) =>
+        tm.event_start?.substring(0, 10) === day &&
+        norm(tm.title).includes(perf)
+      );
+    };
+
+    const deduped = events.filter((e: any) => !isDuplicate(e.name, e.startDate));
+    console.log(`BIT ${citySlug}: ${events.length} raw, ${deduped.length} after TM dedup`);
+
+    if (deduped.length === 0) {
+      return NextResponse.json({ status: 'all_duplicates', citySlug, month });
+    }
+
     // Map MusicEvent JSON-LD to flyer schema
-    const flyers = events.map((e: any) => {
+    const flyers = deduped.map((e: any) => {
       const externalIdMatch = e.url?.match(/\/e\/(\d+)-/);
       const externalId = externalIdMatch ? `bit_${externalIdMatch[1]}` : `bit_${e.name}_${e.startDate}`;
 
