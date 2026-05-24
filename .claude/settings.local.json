@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($resp = Invoke-WebRequest -Uri \"http://localhost:8081/debug-bandsintown?city_slug=chicago-il\" -Method GET -TimeoutSec 30; $data = $resp.Content | ConvertFrom-Json; Write-Host \"Type: $\\($data.type\\)\"; if \\($data.type -eq \"next_data\"\\) { Write-Host \"Keys: $\\($data.keys -join ', '\\)\" } else { Write-Host \"HTML snippet:\"; Write-Host \\($data.html_snippet.Substring\\(0, [Math]::Min\\(1000, $data.html_snippet.Length\\)\\)\\); Write-Host \"JSON blobs found: $\\($data.json_blobs_found\\)\" })",
+      "PowerShell($resp = Invoke-WebRequest -Uri \"http://localhost:8081/debug-bandsintown?city_slug=chicago-il\" -Method GET -TimeoutSec 30; $data = $resp.Content | ConvertFrom-Json; $html = $data.html_snippet; Write-Host $html.Length; $html | Select-String -Pattern \"api|endpoint|graphql|/events\" -AllMatches | ForEach-Object { $_.Matches } | Select-Object -First 20 Value)"
+    ]
+  }
+}

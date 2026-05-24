@@ -227,6 +227,11 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ citySlug, month }),
             }),
+            fetch('/api/bandsintown/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ citySlug, month }),
+            }),
           ]);
         } catch (e) {
           console.error('Sync error:', e);
@@ -251,6 +256,11 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ citySlug, month }),
           }),
+          fetch('/api/bandsintown/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ citySlug, month }),
+          }),
         ]);
       } catch {}
     });
@@ -269,7 +279,8 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
       await fetchEvents(cancelled);
       if (cancelled) return;
 
-      // 2. Pre-sync future months in background (fire and forget)
+      // 2. Pre-sync adjacent months in background (fire and forget)
+      preSyncMonth(targets, currentDate.subtract(1, 'month'));
       preSyncMonth(targets, currentDate.add(1, 'month'));
       preSyncMonth(targets, currentDate.add(2, 'month'));
       preSyncMonth(targets, currentDate.add(3, 'month'));
