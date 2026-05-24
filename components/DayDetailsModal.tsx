@@ -267,7 +267,6 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
           <button onClick={onClose} className="text-2xl text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors leading-none">×</button>
         </div>
 
-        {/* pt-1 so card sits flush under header, normal padding everywhere else */}
         <div className="flex-1 overflow-y-auto pt-1 px-4 pb-4 md:px-8 md:pb-8 space-y-8 md:space-y-12 custom-scrollbar">
           {dayEvents.map((e: any) => {
             const sortedTags = [...(e.flyer_tags || [])].sort((a, b) => (b.vote_count || 0) - (a.vote_count || 0));
@@ -277,50 +276,49 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
                 {/* Top section — two columns */}
                 <div className="flex flex-col md:flex-row gap-8 md:gap-12 flex-1">
 
-                  {/* Left column */}
+                  {/* Left column — no sticky, no overflow clipping */}
                   <div className="w-full md:w-2/5 flex flex-col">
-
-                    {/* Title + location + price + poster — all sticky together */}
-                    <div className="sticky top-0 flex flex-col overflow-hidden" style={{ maxHeight: 'calc(85vh - 5rem)' }}>
-                      <div className="px-4 py-3 text-center mb-3" style={{ border: '1px solid var(--primary)' }}>
-                        <h3 style={{ ...scaled(36), color: 'var(--primary)' }} className="font-black uppercase leading-[0.9] tracking-tighter break-words">
-                          {e.title}
-                        </h3>
-                      </div>
-                      <div className="flex flex-col gap-2 mb-4">
-                        {e.source === 'ticketmaster' && (
-                          <div style={{ borderColor: 'var(--primary)', color: 'var(--primary)', fontSize: 'calc(9px * var(--text-scale, 1))' }}
-                            className="self-start border px-2 py-0.5 font-black uppercase tracking-tighter opacity-60">
-                            Via Ticketmaster
-                          </div>
-                        )}
-                        <div style={scaled(13)} className="font-black tracking-tighter uppercase leading-none">
-                          <span style={{ color: 'var(--primary)', opacity: 0.5 }} className="mr-2">LOCATION:</span>
-                          <span className="text-[var(--text-main)] uppercase">{e.location_name}</span>
+                    <div className="px-4 py-3 text-center mb-3" style={{ border: '1px solid var(--primary)' }}>
+                      <h3 style={{ ...scaled(36), color: 'var(--primary)' }} className="font-black uppercase leading-[0.9] tracking-tighter break-words">
+                        {e.title}
+                      </h3>
+                    </div>
+                    <div className="flex flex-col gap-2 mb-4">
+                      {e.source === 'ticketmaster' && (
+                        <div style={{ borderColor: 'var(--primary)', color: 'var(--primary)', fontSize: 'calc(9px * var(--text-scale, 1))' }}
+                          className="self-start border px-2 py-0.5 font-black uppercase tracking-tighter opacity-60">
+                          Via Ticketmaster
                         </div>
-                        <div style={scaled(13)} className="font-black tracking-tighter uppercase leading-none">
-                          <span style={{ color: 'var(--primary)', opacity: 0.5 }} className="mr-2">PRICE:</span>
-                          <span className="text-[var(--text-main)] uppercase">{e.price || 'FREE'}</span>
+                      )}
+                      <div style={scaled(13)} className="font-black tracking-tighter uppercase leading-none">
+                        <span style={{ color: 'var(--primary)', opacity: 0.5 }} className="mr-2">LOCATION:</span>
+                        <span className="text-[var(--text-main)] uppercase">{e.location_name}</span>
+                      </div>
+                      <div style={scaled(13)} className="font-black tracking-tighter uppercase leading-none">
+                        <span style={{ color: 'var(--primary)', opacity: 0.5 }} className="mr-2">PRICE:</span>
+                        <span className="text-[var(--text-main)] uppercase">{e.price || 'See site'}</span>
+                      </div>
+                      {e.ticket_url && (
+                        <a href={e.ticket_url} target="_blank" rel="noopener noreferrer"
+                          style={{ ...scaled(11), backgroundColor: 'var(--primary)', color: 'var(--bg-main)' }}
+                          className="self-start px-3 py-1.5 font-black uppercase tracking-tighter hover:opacity-80 transition-opacity">
+                          GET TICKETS →
+                        </a>
+                      )}
+                    </div>
+                    <div className="relative group">
+                      {e.image_url ? (
+                        <img
+                          src={e.image_url}
+                          alt="Flyer"
+                          style={{ borderColor: 'var(--border-color)' }}
+                          className="w-full h-auto shadow-[0_0_30px_rgba(0,0,0,0.5)] border"
+                        />
+                      ) : (
+                        <div style={scaled(10)} className="w-full h-48 md:h-64 bg-black/40 flex items-center justify-center border border-white/5 italic text-[var(--text-muted)] uppercase tracking-tighter">
+                          No Flyer Projected
                         </div>
-                        {e.ticket_url && (
-                          <a href={e.ticket_url} target="_blank" rel="noopener noreferrer"
-                            style={{ ...scaled(11), backgroundColor: 'var(--primary)', color: 'var(--bg-main)' }}
-                            className="self-start px-3 py-1.5 font-black uppercase tracking-tighter hover:opacity-80 transition-opacity">
-                            GET TICKETS →
-                          </a>
-                        )}
-                      </div>
-                      <div className="relative group flex-1 min-h-0 flex items-center justify-center">
-                        {e.image_url ? (
-                          <img src={e.image_url} alt="Flyer"
-                            style={{ borderColor: 'var(--border-color)' }}
-                            className="w-full max-h-full object-contain shadow-[0_0_30px_rgba(0,0,0,0.5)] border" />
-                        ) : (
-                          <div style={scaled(10)} className="w-full h-48 md:h-64 bg-black/40 flex items-center justify-center border border-white/5 italic text-[var(--text-muted)] uppercase tracking-tighter">
-                            No Flyer Projected
-                          </div>
-                        )}
-                      </div>
+                      )}
                     </div>
                   </div>
 

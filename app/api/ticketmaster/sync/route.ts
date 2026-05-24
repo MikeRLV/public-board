@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import dayjs from 'dayjs';
+import { extractTags } from '@/lib/extractTags';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -75,58 +76,23 @@ function mapTMEventToFlyer(event: any, citySlug: string) {
     || imagePool?.sort((a: any, b: any) => b.width - a.width)?.[0]?.url
     || null;
 
-  // Tags from classifications
-  const tags: string[] = ['ticketmaster'];
+  // extractTags handles age detection (catches what TM misses) + genre keyword scanning
+  const extracted = extractTags(event.info || event.pleaseNote, event.name);
+  const tags: string[] = ['ticketmaster', ...extracted];
+
+  // Classifications — structured genre data from TM's API, added on top of extracted tags
   const classification = event.classifications?.[0];
-  if (classification?.segment?.name) tags.push(slugify(classification.segment.name));
+  if (classification?.segment?.name) {
+    const seg = slugify(classification.segment.name);
+    if (!tags.includes(seg)) tags.push(seg);
+  }
   if (classification?.genre?.name && classification.genre.name !== 'Undefined') {
-    tags.push(slugify(classification.genre.name));
+    const genre = slugify(classification.genre.name);
+    if (!tags.includes(genre)) tags.push(genre);
   }
   if (classification?.subGenre?.name && classification.subGenre.name !== 'Undefined') {
-    tags.push(slugify(classification.subGenre.name));
-  }
-
-  // Age detection — check API field first, then scan description + title
-  const desc = (event.info || event.pleaseNote || '').toLowerCase();
-  const title = (event.name || '').toLowerCase();
-  const fullText = `${desc} ${title}`;
-  const ageRestriction = event.ageRestrictions?.legalAgeEnforced;
-  
-  if (ageRestriction === false) {
-    tags.push('all-ages');
-  } else if (
-    fullText.includes('21+') ||
-    fullText.includes('21 and over') ||
-    fullText.includes('21 or older') ||
-    fullText.includes('21 years') ||
-    fullText.includes('must be 21') ||
-    fullText.includes('ages 21') ||
-    fullText.includes('21+ event') ||
-    fullText.includes('21+ only') ||
-    /\b21\+/.test(fullText)
-  ) {
-    tags.push('21+');
-  } else if (
-    fullText.includes('18+') ||
-    fullText.includes('18 and over') ||
-    fullText.includes('18 or older') ||
-    fullText.includes('18 years') ||
-    fullText.includes('must be 18') ||
-    fullText.includes('ages 18') ||
-    fullText.includes('18+ event') ||
-    /\b18\+/.test(fullText)
-  ) {
-    tags.push('18+');
-  } else if (
-    fullText.includes('all ages') ||
-    fullText.includes('all-ages') ||
-    fullText.includes('family friendly') ||
-    fullText.includes('family-friendly') ||
-    fullText.includes('all age ') ||
-    fullText.includes('open to all') ||
-    fullText.includes('no age')
-  ) {
-    tags.push('all-ages');
+    const subGenre = slugify(classification.subGenre.name);
+    if (!tags.includes(subGenre)) tags.push(subGenre);
   }
 
   return {
@@ -142,7 +108,7 @@ function mapTMEventToFlyer(event: any, citySlug: string) {
     source: 'ticketmaster',
     external_id: event.id,
     cached_at: new Date().toISOString(),
-    _tags: tags, // underscore prefix — used post-insert, not sent to DB
+    _tags: tags,
   };
 }
 
@@ -154,7 +120,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'citySlug and month required' }, { status: 400 });
     }
 
-    // Check if cache is fresh — must be fully cached AND within 24hrs
+    // Check if cache is fresh
     const cacheThreshold = new Date(Date.now() - CACHE_HOURS * 60 * 60 * 1000).toISOString();
     const nextMonth = dayjs(`${month}-01`).add(1, 'month').format('YYYY-MM');
     const { data: existing } = await supabase
@@ -183,7 +149,6 @@ export async function POST(request: NextRequest) {
     const flyers = tmEvents.map(e => mapTMEventToFlyer(e, citySlug));
     const flyersForDB = flyers.map(({ _tags, ...f }) => f);
 
-    // Insert individually — skip any that violate title/external_id constraints
     const upserted: any[] = [];
     for (const flyer of flyersForDB) {
       const { data, error } = await supabase
@@ -215,7 +180,6 @@ export async function POST(request: NextRequest) {
         )
       );
 
-      // Mark as fully cached now that tags are inserted
       await supabase
         .from('flyers')
         .update({ is_cached: true, cached_at: new Date().toISOString() })

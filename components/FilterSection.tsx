@@ -81,6 +81,9 @@ export function FilterSection({
   toggleTag, 
   scaled,
   onTagsClick,
+  showAllEvents,
+  excludeMode,
+  setExcludeMode,
 }: any) {
   const [inputValue, setInputValue] = useState("");
   const [suggestions, setSuggestions] = useState<{ name: string; count: number }[]>([]);
@@ -146,14 +149,29 @@ export function FilterSection({
           </span>
         </div>
 
-        <button 
-          onClick={() => setFilterMode(filterMode === 'AND' ? 'OR' : 'AND')} 
-          style={{ fontSize: `calc(${scaled(10.5).fontSize} * 0.9)` } as any}
-          className="flex items-center border border-neutral-700 rounded-sm overflow-hidden shrink-0"
-        >
-          <div className={`px-2.5 py-1 font-bold transition-colors ${filterMode === 'AND' ? 'bg-[var(--primary)] text-black' : 'text-neutral-500'}`}>AND</div>
-          <div className={`px-2.5 py-1 font-bold transition-colors ${filterMode === 'OR' ? 'bg-[var(--primary)] text-black' : 'text-neutral-500'}`}>OR</div>
-        </button>
+        {/* AND/OR toggle when showAllEvents is off, EXCLUDE toggle when showAllEvents is on */}
+        {showAllEvents ? (
+          <button
+            onClick={() => setExcludeMode?.(!excludeMode)}
+            style={{ fontSize: `calc(${scaled(10.5).fontSize} * 0.9)` } as any}
+            className={`flex items-center border rounded-sm overflow-hidden shrink-0 transition-colors group ${
+              excludeMode ? 'border-red-600' : 'border-neutral-700 hover:border-red-500'
+            }`}
+          >
+            <div className={`px-3.5 py-1 font-bold transition-colors ${
+              excludeMode ? 'bg-red-600 text-white' : 'text-neutral-500 group-hover:text-red-400'
+            }`}>EXCLUDE</div>
+          </button>
+        ) : (
+          <button
+            onClick={() => setFilterMode(filterMode === 'AND' ? 'OR' : 'AND')}
+            style={{ fontSize: `calc(${scaled(10.5).fontSize} * 0.9)` } as any}
+            className="flex items-center border border-neutral-700 rounded-sm overflow-hidden shrink-0"
+          >
+            <div className={`px-2.5 py-1 font-bold transition-colors ${filterMode === 'AND' ? 'bg-[var(--primary)] text-black' : 'text-neutral-500'}`}>AND</div>
+            <div className={`px-2.5 py-1 font-bold transition-colors ${filterMode === 'OR' ? 'bg-[var(--primary)] text-black' : 'text-neutral-500'}`}>OR</div>
+          </button>
+        )}
       </div>
 
       <div className="relative">
@@ -182,9 +200,13 @@ export function FilterSection({
             key={tag}
             onClick={() => toggleTag(tag)}
             style={{ ...scaled(10), padding: `calc(0.125rem * var(--text-scale)) calc(0.5rem * var(--text-scale))` }}
-            className="bg-neutral-800 border border-neutral-700 font-bold cursor-pointer hover:border-red-500 transition-all truncate uppercase"
+            className={`border font-bold cursor-pointer transition-all truncate uppercase ${
+              showAllEvents && excludeMode
+                ? 'bg-red-900/30 border-red-600 text-red-300 hover:border-red-400'
+                : 'bg-neutral-800 border-neutral-700 hover:border-red-500'
+            }`}
           >
-            {tag} &times;
+            {showAllEvents && excludeMode ? '✕ ' : ''}{tag} &times;
           </span>
         ))}
       </div>

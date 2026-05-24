@@ -36,7 +36,8 @@ export function CalendarLogic({ city, initialLocals = [], initialTags = [] }: { 
     userId, events, filteredEvents, weightedTags, weightedLocals, allTimeTags,
     savedLocations, activeTags, setActiveTags,
     activeTowns, setActiveTowns, filterMode, setFilterMode, showAllEvents, setShowAllEvents,
-    showSpam, setShowSpam, showAllAges, setShowAllAges, show18, setShow18, show21, setShow21, 
+    excludeMode, setExcludeMode,
+    showSpam, setShowSpam, showAllAges, setShowAllAges, show18, setShow18, show21, setShow21,
     slugify, fetchEvents
   } = useCalendarData(city, currentDate, initialLocals, initialTags);
 
@@ -114,8 +115,10 @@ export function CalendarLogic({ city, initialLocals = [], initialTags = [] }: { 
         onTrendingClick={() => openBrowse('trending')}
         onBucketClick={() => openBrowse('locals')}
         onTagsClick={() => openBrowse('all-tags')}
-        showAllEvents={showAllEvents} 
-        setShowAllEvents={setShowAllEvents} 
+        showAllEvents={showAllEvents}
+        setShowAllEvents={setShowAllEvents}
+        excludeMode={excludeMode}
+        setExcludeMode={setExcludeMode}
         showSpam={showSpam} 
         setShowSpam={setShowSpam} 
         showAllAges={showAllAges} 

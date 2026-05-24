@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import dayjs from "dayjs";
 
@@ -24,12 +24,24 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
   const [activeTowns, setActiveTowns] = useState<string[]>(initialLocals.map(l => slugify(l)));
   const [filterMode, setFilterMode] = useState<'OR' | 'AND'>('OR');
   const [showAllEvents, setShowAllEvents] = useState(false);
+  const [excludeMode, setExcludeMode] = useState(false);
   const [showSpam, setShowSpam] = useState(false);
   const [showAllAges, setShowAllAges] = useState(false);
   const [show18, setShow18] = useState(false);
   const [show21, setShow21] = useState(false);
 
-  // All locals — always fetched on mount, never gated on selection
+  // Reset excludeMode when showAllEvents is turned off
+  useEffect(() => {
+    if (!showAllEvents) setExcludeMode(false);
+  }, [showAllEvents]);
+
+  // Ref so background fetches can check if still mounted without triggering re-renders
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
+
   useEffect(() => {
     const fetchLocals = async () => {
       const { data } = await supabase.from('weighted_locals').select('name, weight').order('weight', { ascending: false });
@@ -41,7 +53,6 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
     fetchLocals();
   }, []);
 
-  // All-time tags: fetched once on mount, used by BrowseModal 'all-tags' view
   useEffect(() => {
     const fetchAllTimeTags = async () => {
       const { data, error } = await supabase
@@ -151,43 +162,8 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
     setUserId(storedId);
   }, []);
 
-  const syncTicketmaster = async (towns: string[], date: dayjs.Dayjs) => {
-    const month = date.format('YYYY-MM');
-    const targets = towns.length > 0 ? towns : city ? [slugify(city)] : [];
-    if (targets.length === 0) return;
-
-    await Promise.all(
-      targets.map(async (citySlug) => {
-        try {
-          const res = await fetch('/api/ticketmaster/sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ citySlug, month }),
-          });
-          const d = await res.json();
-          console.log('TM sync:', d);
-        } catch (e) {
-          console.error('TM sync error:', e);
-        }
-      })
-    );
-  };
-
-  const preSyncMonth = (towns: string[], date: dayjs.Dayjs) => {
-    const month = date.format('YYYY-MM');
-    const targets = towns.length > 0 ? towns : city ? [slugify(city)] : [];
-    targets.forEach(async (citySlug) => {
-      try {
-        await fetch('/api/ticketmaster/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ citySlug, month }),
-        });
-      } catch {}
-    });
-  };
-
-  const fetchEvents = async (cancelled = false) => {
+  // Full fetch — shows loading spinner, used on initial load
+  const fetchEvents = useCallback(async (cancelled = false) => {
     setIsLoading(true);
     const monthStart = currentDate.format('YYYY-MM-01');
     const nextMonth = currentDate.add(1, 'month').format('YYYY-MM-01');
@@ -208,27 +184,114 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
 
     if (!cancelled && !error && data) setEvents(data);
     if (!cancelled) setIsLoading(false);
+  }, [currentDate, city, activeTowns]);
+
+  // Silent background fetch — no loading state, just merges new events in
+  const silentFetch = useCallback(async () => {
+    if (!isMountedRef.current) return;
+    const monthStart = currentDate.format('YYYY-MM-01');
+    const nextMonth = currentDate.add(1, 'month').format('YYYY-MM-01');
+
+    const citySlug = city ? slugify(city) : null;
+    const allSearchTowns = Array.from(new Set([...activeTowns, citySlug].filter((t): t is string => typeof t === 'string' && t.length > 0)));
+
+    if (allSearchTowns.length === 0) return;
+
+    const cityFilters = allSearchTowns.map((t: string) => `city_slug.cs.{${t}}`).join(',');
+
+    const { data, error } = await supabase
+      .from('flyers')
+      .select('*, flyer_tags(vote_count, tags(name))')
+      .gte('event_start', monthStart)
+      .lt('event_start', nextMonth)
+      .or(cityFilters);
+
+    if (isMountedRef.current && !error && data) setEvents(data);
+  }, [currentDate, city, activeTowns]);
+
+  const syncPlatforms = async (targets: string[], date: dayjs.Dayjs) => {
+    const month = date.format('YYYY-MM');
+    if (targets.length === 0) return;
+
+    await Promise.all(
+      targets.map(async (citySlug) => {
+        try {
+          await Promise.allSettled([
+            fetch('/api/ticketmaster/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ citySlug, month }),
+            }),
+            fetch('/api/dice/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ citySlug, month }),
+            }),
+          ]);
+        } catch (e) {
+          console.error('Sync error:', e);
+        }
+      })
+    );
+  };
+
+  const preSyncMonth = (towns: string[], date: dayjs.Dayjs) => {
+    const month = date.format('YYYY-MM');
+    const targets = towns.length > 0 ? towns : city ? [slugify(city)] : [];
+    targets.forEach(async (citySlug) => {
+      try {
+        await Promise.allSettled([
+          fetch('/api/ticketmaster/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ citySlug, month }),
+          }),
+          fetch('/api/dice/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ citySlug, month }),
+          }),
+        ]);
+      } catch {}
+    });
   };
 
   useEffect(() => {
     let cancelled = false;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
 
     const run = async () => {
+      const targets = activeTowns.length > 0
+        ? activeTowns
+        : city ? [slugify(city)] : [];
+
+      // 1. Show whatever is already in Supabase immediately
       await fetchEvents(cancelled);
       if (cancelled) return;
 
-      preSyncMonth(activeTowns, currentDate.add(1, 'month'));
-      preSyncMonth(activeTowns, currentDate.add(2, 'month'));
-      preSyncMonth(activeTowns, currentDate.add(3, 'month'));
+      // 2. Pre-sync future months in background (fire and forget)
+      preSyncMonth(targets, currentDate.add(1, 'month'));
+      preSyncMonth(targets, currentDate.add(2, 'month'));
+      preSyncMonth(targets, currentDate.add(3, 'month'));
 
-      await syncTicketmaster(activeTowns, currentDate);
-      if (cancelled) return;
+      // 3. Start polling silently every 5s so events appear as they land
+      pollInterval = setInterval(() => {
+        if (!cancelled) silentFetch();
+      }, 5000);
 
-      fetchEvents(cancelled);
+      // 4. Sync current month — wait for it to finish
+      await syncPlatforms(targets, currentDate);
+
+      // 5. Stop polling, do one final silent fetch to catch anything last
+      if (pollInterval) clearInterval(pollInterval);
+      if (!cancelled) silentFetch();
     };
 
     run();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (pollInterval) clearInterval(pollInterval);
+    };
   }, [currentDate, city, activeTowns]);
 
   const filteredEvents = useMemo(() => {
@@ -246,17 +309,28 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
       const isSpam = totalVotes > 0 && ((e.flyer_tags?.find((ft: any) => slugify(ft.tags.name) === 'spam')?.vote_count || 0) / totalVotes >= 0.25);
       if (isSpam && !showSpam) return false;
 
-      if (showAllEvents) return true;
+      if (showAllEvents) {
+        // In exclude mode, hide events that have any of the active tags
+        if (excludeMode && activeTags.length > 0) {
+          const eventTags = e.flyer_tags?.map((ft: any) => slugify(ft.tags.name)) || [];
+          if (e.source) eventTags.push(slugify(e.source));
+          return !activeTags.some((tag: string) => eventTags.includes(slugify(tag)));
+        }
+        return true;
+      }
+
       if (activeTags.length === 0) return false;
 
       const eventTags = e.flyer_tags?.map((ft: any) => slugify(ft.tags.name)) || [];
+      if (e.source) eventTags.push(slugify(e.source));
+
       const passesTags = filterMode === 'OR' 
         ? activeTags.some((tag: string) => eventTags.includes(slugify(tag))) 
         : activeTags.every((tag: string) => eventTags.includes(slugify(tag)));
         
       return passesTags;
     }).sort((a, b) => (b.flyer_tags?.length || 0) - (a.flyer_tags?.length || 0));
-  }, [events, activeTags, activeTowns, city, filterMode, showAllEvents, showSpam]);
+  }, [events, activeTags, activeTowns, city, filterMode, showAllEvents, excludeMode, showSpam]);
 
   return {
     userId, 
@@ -267,7 +341,9 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
     allTimeTags,
     weightedLocals,
     savedLocations, activeTags, setActiveTags,
-    activeTowns, setActiveTowns, filterMode, setFilterMode, showAllEvents, setShowAllEvents,
+    activeTowns, setActiveTowns, filterMode, setFilterMode,
+    showAllEvents, setShowAllEvents,
+    excludeMode, setExcludeMode,
     showSpam, setShowSpam, showAllAges, setShowAllAges, show18, setShow18, show21, setShow21, 
     slugify, fetchEvents
   };

@@ -232,14 +232,17 @@ export function Sidebar(props: any) {
           
           <div className="h-10 shrink-0" />
 
-          <FilterSection {...{ 
-            TagPopRef, 
-            filterMode: props.filterMode, 
-            setFilterMode: props.setFilterMode, 
-            activeTags, 
-            toggleTag, 
+          <FilterSection {...{
+            TagPopRef,
+            filterMode: props.filterMode,
+            setFilterMode: props.setFilterMode,
+            activeTags,
+            toggleTag,
             scaled,
             onTagsClick: props.onTagsClick,
+            showAllEvents: props.showAllEvents,
+            excludeMode: props.excludeMode,
+            setExcludeMode: props.setExcludeMode,
           }} />
         </div>
 
