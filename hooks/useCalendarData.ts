@@ -234,6 +234,11 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ citySlug, month }),
             }),
+            fetch('/api/ntdlv/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ citySlug, month }),
+            }),
           ]);
         } catch (e) {
           console.error('Sync error:', e);
@@ -260,6 +265,11 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
             body: JSON.stringify({ citySlug, month }),
           }),
           fetch('/api/bandsintown/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ citySlug, month }),
+          }),
+          fetch('/api/ntdlv/sync', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ citySlug, month }),

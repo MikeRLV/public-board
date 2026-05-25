@@ -287,7 +287,7 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
                       {e.source && (
                         <div style={{ borderColor: 'var(--primary)', color: 'var(--primary)', fontSize: 'calc(9px * var(--text-scale, 1))' }}
                           className="self-start border px-2 py-0.5 font-black uppercase tracking-tighter opacity-60">
-                          Via {e.source === 'ticketmaster' ? 'Ticketmaster' : e.source === 'bandsintown' ? 'Bandsintown' : e.source === 'dice' ? 'Dice' : e.source}
+                          Via {e.source === 'ticketmaster' ? 'Ticketmaster' : e.source === 'bandsintown' ? 'Bandsintown' : e.source === 'dice' ? 'Dice' : e.source === 'ntdlv' ? 'NTDLV' : e.source}
                         </div>
                       )}
                       <div style={scaled(13)} className="font-black tracking-tighter uppercase leading-none">
