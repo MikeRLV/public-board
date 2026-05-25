@@ -36,7 +36,12 @@
       "Bash(grep -oE \">[^<]{5,100}<\")",
       "Bash(curl -s --max-time 90 -X POST http://localhost:8081/scrape-vegas-underground -H \"Content-Type: application/json\" -d '{\"city\":\"las vegas\",\"month\":\"\"}')",
       "Bash(npx tsc *)",
-      "Bash(curl -s --max-time 120 -X POST http://localhost:3000/api/vegas-underground/sync -H \"Content-Type: application/json\" -d '{\"citySlug\":\"las-vegas-nv\",\"month\":\"2026-05\"}')"
+      "Bash(curl -s --max-time 120 -X POST http://localhost:3000/api/vegas-underground/sync -H \"Content-Type: application/json\" -d '{\"citySlug\":\"las-vegas-nv\",\"month\":\"2026-05\"}')",
+      "Bash(Get-Process -Name \"node\" -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object Id, CPU, WorkingSet, CommandLine)",
+      "Bash(tasklist)",
+      "Bash(wmic process *)",
+      "Bash(curl -s --max-time 60 -X POST http://localhost:8081/scrape-vegas-underground -H \"Content-Type: application/json\" -d '{\"city\":\"las vegas\",\"month\":\"2026-05\"}')"
     ]
   }
 }
