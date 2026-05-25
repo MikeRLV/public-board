@@ -9,14 +9,16 @@ const supabase = createClient(
 );
 
 const CACHE_HOURS = 24;
-const NTDLV_CITY_SLUG = 'las-vegas-nv';
+const NTDLV_CITY_SLUG = 'las-vegas';
+// Accept both slugs in case users saved either variant
+const LV_SLUGS = ['las-vegas', 'las-vegas-nv'];
 
 export async function POST(request: NextRequest) {
   try {
     const { citySlug, month } = await request.json();
 
     // NTDLV only covers Las Vegas
-    if (citySlug !== NTDLV_CITY_SLUG) {
+    if (!LV_SLUGS.includes(citySlug)) {
       return NextResponse.json({ status: 'not_applicable', citySlug });
     }
 
@@ -74,7 +76,7 @@ export async function POST(request: NextRequest) {
       if (e.price === 'Free' || e.price === '$0') {
         if (!extracted.includes('free')) extracted.push('free');
       }
-      const tags: string[] = ['ntdlv', ...extracted];
+      const tags: string[] = ['ntdlv', 'nothing-to-do-las-vegas', 'local', ...extracted];
 
       return {
         title: e.name,

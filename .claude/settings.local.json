@@ -41,7 +41,21 @@
       "Bash(Select-Object Id, CPU, WorkingSet, CommandLine)",
       "Bash(tasklist)",
       "Bash(wmic process *)",
-      "Bash(curl -s --max-time 60 -X POST http://localhost:8081/scrape-vegas-underground -H \"Content-Type: application/json\" -d '{\"city\":\"las vegas\",\"month\":\"2026-05\"}')"
+      "Bash(curl -s --max-time 60 -X POST http://localhost:8081/scrape-vegas-underground -H \"Content-Type: application/json\" -d '{\"city\":\"las vegas\",\"month\":\"2026-05\"}')",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\)[0]; print\\(json.dumps\\(d['NetworkSettings'], indent=2\\)\\)\")",
+      "Bash(curl -s -X POST http://localhost:8081/scrape-ntdlv -H \"Content-Type: application/json\" -d '{\"city\":\"las vegas\",\"month\":\"2026-05\"}')",
+      "Bash(curl -s 'https://omotngyhvqfqdqfwvhzg.supabase.co/rest/v1/flyers?select=source&limit=1000' -H 'apikey: sb_publishable_zR8szEgDg7P4ZKPGU1Z1Dw_KgtsVcPU' -H 'Authorization: Bearer sb_publishable_zR8szEgDg7P4ZKPGU1Z1Dw_KgtsVcPU')",
+      "Bash(curl -s 'https://omotngyhvqfqdqfwvhzg.supabase.co/rest/v1/flyers?select=source&limit=2000' -H 'apikey: sb_publishable_zR8szEgDg7P4ZKPGU1Z1Dw_KgtsVcPU' -H 'Authorization: Bearer sb_publishable_zR8szEgDg7P4ZKPGU1Z1Dw_KgtsVcPU')",
+      "Bash(curl -s 'https://omotngyhvqfqdqfwvhzg.supabase.co/rest/v1/flyers?select=source&limit=2000&offset=2000' -H 'apikey: sb_publishable_zR8szEgDg7P4ZKPGU1Z1Dw_KgtsVcPU' -H 'Authorization: Bearer sb_publishable_zR8szEgDg7P4ZKPGU1Z1Dw_KgtsVcPU')",
+      "Bash(curl -s 'https://omotngyhvqfqdqfwvhzg.supabase.co/rest/v1/flyers?select=source&limit=2000&offset=3000' -H 'apikey: sb_publishable_zR8szEgDg7P4ZKPGU1Z1Dw_KgtsVcPU' -H 'Authorization: Bearer sb_publishable_zR8szEgDg7P4ZKPGU1Z1Dw_KgtsVcPU')",
+      "Bash(curl -s 'https://omotngyhvqfqdqfwvhzg.supabase.co/rest/v1/flyers?select=source&limit=2000&offset=4000' -H 'apikey: sb_publishable_zR8szEgDg7P4ZKPGU1Z1Dw_KgtsVcPU' -H 'Authorization: Bearer sb_publishable_zR8szEgDg7P4ZKPGU1Z1Dw_KgtsVcPU')",
+      "Bash(curl -s 'https://omotngyhvqfqdqfwvhzg.supabase.co/rest/v1/flyers?source=eq.dice&select=city_slug&limit=2' -H 'apikey: sb_publishable_zR8szEgDg7P4ZKPGU1Z1Dw_KgtsVcPU' -H 'Authorization: Bearer sb_publishable_zR8szEgDg7P4ZKPGU1Z1Dw_KgtsVcPU')",
+      "Bash(curl -s 'https://omotngyhvqfqdqfwvhzg.supabase.co/rest/v1/flyers?source=eq.ntdlv&select=city_slug&limit=2' -H 'apikey: sb_publishable_zR8szEgDg7P4ZKPGU1Z1Dw_KgtsVcPU' -H 'Authorization: Bearer sb_publishable_zR8szEgDg7P4ZKPGU1Z1Dw_KgtsVcPU')",
+      "Bash(curl -s 'https://omotngyhvqfqdqfwvhzg.supabase.co/rest/v1/flyers?source=eq.vegas-underground&select=city_slug&limit=2' -H 'apikey: sb_publishable_zR8szEgDg7P4ZKPGU1Z1Dw_KgtsVcPU' -H 'Authorization: Bearer sb_publishable_zR8szEgDg7P4ZKPGU1Z1Dw_KgtsVcPU')",
+      "Bash(curl -s -X PATCH https://omotngyhvqfqdqfwvhzg.supabase.co/rest/v1/flyers?source=eq.ntdlv -H 'apikey: sb_publishable_zR8szEgDg7P4ZKPGU1Z1Dw_KgtsVcPU' -H 'Authorization: Bearer sb_publishable_zR8szEgDg7P4ZKPGU1Z1Dw_KgtsVcPU' -H 'Content-Type: application/json' -d '{\"city_slug\": [\"las-vegas\"], \"is_cached\": false}')",
+      "Bash(curl -s -X PATCH https://omotngyhvqfqdqfwvhzg.supabase.co/rest/v1/flyers?source=eq.vegas-underground -H 'apikey: sb_publishable_zR8szEgDg7P4ZKPGU1Z1Dw_KgtsVcPU' -H 'Authorization: Bearer sb_publishable_zR8szEgDg7P4ZKPGU1Z1Dw_KgtsVcPU' -H 'Content-Type: application/json' -d '{\"city_slug\": [\"las-vegas\"], \"is_cached\": false}')",
+      "Bash(curl -s -X POST http://localhost:3000/api/ntdlv/sync -H 'Content-Type: application/json' -d '{\"citySlug\":\"las-vegas\",\"month\":\"2026-05\"}')",
+      "Bash(curl -s -X POST http://localhost:3000/api/vegas-underground/sync -H 'Content-Type: application/json' -d '{\"citySlug\":\"las-vegas\",\"month\":\"2026-05\"}')"
     ]
   }
 }

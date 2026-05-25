@@ -9,14 +9,16 @@ const supabase = createClient(
 );
 
 const CACHE_HOURS = 24;
-const VU_CITY_SLUG = 'las-vegas-nv';
+const VU_CITY_SLUG = 'las-vegas';
+// Accept both slugs in case users saved either variant
+const LV_SLUGS = ['las-vegas', 'las-vegas-nv'];
 
 export async function POST(request: NextRequest) {
   try {
     const { citySlug, month } = await request.json();
 
     // Vegas Underground only covers Las Vegas
-    if (citySlug !== VU_CITY_SLUG) {
+    if (!LV_SLUGS.includes(citySlug)) {
       return NextResponse.json({ status: 'not_applicable', citySlug });
     }
 
