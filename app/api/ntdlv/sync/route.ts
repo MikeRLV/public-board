@@ -67,15 +67,22 @@ export async function POST(request: NextRequest) {
       const slug = (e.url || '').split('/events/').pop() || '';
       const externalId = `ntdlv_${slug}`;
 
-      const extracted = extractTags(e.description, e.name);
+      // Build tag corpus: description + title + price string for "free" detection
+      const tagText = [e.description, e.name, e.price].filter(Boolean).join(' ');
+      const extracted = extractTags(tagText, e.name);
+      // If price is explicitly "Free" or $0, add free tag
+      if (e.price === 'Free' || e.price === '$0') {
+        if (!extracted.includes('free')) extracted.push('free');
+      }
       const tags: string[] = ['ntdlv', ...extracted];
 
       return {
         title: e.name,
-        location_name: e.location || 'Las Vegas',
+        location_name: [e.location, e.address].filter(Boolean).join(' — ') || 'Las Vegas',
         city_slug: [NTDLV_CITY_SLUG],
         event_start: e.startDate || null,
         event_end: e.endDate || null,
+        price: e.price || null,
         description: e.description || '',
         image_url: e.image || null,
         ticket_url: e.url || 'https://www.ntdlv.com/events',
