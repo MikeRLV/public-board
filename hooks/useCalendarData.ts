@@ -216,12 +216,14 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
     await Promise.all(
       targets.map(async (citySlug) => {
         try {
+          // TM runs first so BIT dedup can check against it
+          await fetch('/api/ticketmaster/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ citySlug, month }),
+          }).catch(() => {});
+
           await Promise.allSettled([
-            fetch('/api/ticketmaster/sync', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ citySlug, month }),
-            }),
             fetch('/api/dice/sync', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -245,12 +247,13 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
     const targets = towns.length > 0 ? towns : city ? [slugify(city)] : [];
     targets.forEach(async (citySlug) => {
       try {
+        await fetch('/api/ticketmaster/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ citySlug, month }),
+        }).catch(() => {});
+
         await Promise.allSettled([
-          fetch('/api/ticketmaster/sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ citySlug, month }),
-          }),
           fetch('/api/dice/sync', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -307,14 +310,38 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
 
   const filteredEvents = useMemo(() => {
     if (activeTowns.length === 0 && !city) return [];
-    
+
     const citySlug = city ? slugify(city) : null;
     const currentViewTowns = Array.from(new Set([...activeTowns, citySlug].filter((t): t is string => typeof t === 'string' && t.length > 0)));
+
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    // Build a day → [normalizedTMTitle] map from all loaded TM events so we can
+    // suppress BIT entries for shows already covered by Ticketmaster.
+    const tmByDay = new Map<string, string[]>();
+    for (const e of events) {
+      if (e.source !== 'ticketmaster') continue;
+      const day = e.event_start?.substring(0, 10);
+      if (!day) continue;
+      if (!tmByDay.has(day)) tmByDay.set(day, []);
+      tmByDay.get(day)!.push(norm(e.title));
+    }
+
+    const hasTMDuplicate = (e: any) => {
+      if (e.source !== 'bandsintown') return false;
+      const day = e.event_start?.substring(0, 10);
+      if (!day) return false;
+      const perf = norm(e.title.split(/[@\-–]/)[0].trim());
+      if (perf.length < 4) return false;
+      return (tmByDay.get(day) || []).some(tmTitle => tmTitle.includes(perf));
+    };
 
     return events.filter((e: any) => {
       const eventSlugs = Array.isArray(e.city_slug) ? e.city_slug : [e.city_slug];
       const isInTargetLoCAL = currentViewTowns.some(town => eventSlugs.includes(town));
       if (!isInTargetLoCAL) return false;
+
+      if (hasTMDuplicate(e)) return false;
 
       const totalVotes = e.flyer_tags?.reduce((acc: number, ft: any) => acc + Math.max(0, ft.vote_count || 0), 0) || 0;
       const isSpam = totalVotes > 0 && ((e.flyer_tags?.find((ft: any) => slugify(ft.tags.name) === 'spam')?.vote_count || 0) / totalVotes >= 0.25);
