@@ -8,7 +8,6 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-const CACHE_HOURS = 24;
 const NTDLV_CITY_SLUG = 'las-vegas';
 // Accept both slugs in case users saved either variant
 const LV_SLUGS = ['las-vegas', 'las-vegas-nv'];
@@ -26,24 +25,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'month required' }, { status: 400 });
     }
 
-    // Check cache — skip scrape if fresh data exists
+    // Supabase IS the cache — no time-based TTL.
+    // Fetch external_ids already stored for this city/month.
     const nextMonth = dayjs(`${month}-01`).add(1, 'month').format('YYYY-MM');
-    const cacheThreshold = new Date(Date.now() - CACHE_HOURS * 60 * 60 * 1000).toISOString();
 
-    const { data: existing } = await supabase
+    const { data: cachedRows } = await supabase
       .from('flyers')
-      .select('cached_at')
+      .select('external_id')
       .eq('source', 'ntdlv')
       .eq('is_cached', true)
       .contains('city_slug', [NTDLV_CITY_SLUG])
       .gte('event_start', `${month}-01`)
-      .lt('event_start', `${nextMonth}-01`)
-      .limit(1);
+      .lt('event_start', `${nextMonth}-01`);
 
-    const isFresh = existing?.[0]?.cached_at && existing[0].cached_at > cacheThreshold;
-    if (isFresh) {
-      return NextResponse.json({ status: 'cache_hit', citySlug, month });
-    }
+    const cachedIds = new Set(
+      (cachedRows || []).map((r: any) => r.external_id).filter(Boolean)
+    );
 
     // Scrape via Python service
     const scraperBase = process.env.DICE_SCRAPER_URL ?? 'http://localhost:8081';
@@ -64,10 +61,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: 'no_events', citySlug, month });
     }
 
-    // Map to flyer schema
-    const flyers = events.map((e: any) => {
+    // Compute external_id first so we can filter already-cached events
+    const withIds = events.map((e: any) => {
       const slug = (e.url || '').split('/events/').pop() || '';
-      const externalId = `ntdlv_${slug}`;
+      const externalId = `ntdlv_${slug || e.name?.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+      return { ...e, _externalId: externalId };
+    });
+
+    const newEvents = withIds.filter((e: any) => !cachedIds.has(e._externalId));
+
+    if (newEvents.length === 0) {
+      return NextResponse.json({ status: 'no_new_events', citySlug, month, cached: cachedIds.size });
+    }
+
+    // Map to flyer schema
+    const flyers = newEvents.map((e: any) => {
+      const externalId = e._externalId;
 
       // Build tag corpus: description + title + price string for "free" detection
       const tagText = [e.description, e.name, e.price].filter(Boolean).join(' ');
@@ -99,18 +108,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: 'no_valid_dates', citySlug, month });
     }
 
-    // Upsert flyers then apply tags
-    const upserted: any[] = [];
-    for (const flyer of flyers) {
-      const { _tags, ...flyerData } = flyer;
-      const { data, error } = await supabase
-        .from('flyers')
-        .upsert({ ...flyerData, is_cached: false }, { onConflict: 'external_id' })
-        .select('id, external_id')
-        .single();
-      if (error) console.error('NTDLV upsert failed:', error.message, flyerData.title);
-      if (!error && data) upserted.push({ ...data, _tags });
-    }
+    // Build tags map then batch upsert all new events in one DB call
+    const tagsMap: Record<string, string[]> = {};
+    const flyerDatas = flyers.map(({ _tags, ...flyerData }) => {
+      tagsMap[flyerData.external_id] = _tags || [];
+      return { ...flyerData, is_cached: false };
+    });
+
+    const { data: batchData, error: batchError } = await supabase
+      .from('flyers')
+      .upsert(flyerDatas, { onConflict: 'external_id' })
+      .select('id, external_id');
+
+    if (batchError) console.error('NTDLV batch upsert failed:', batchError.message);
+
+    const upserted = (batchData || []).map((row: any) => ({
+      id: row.id,
+      external_id: row.external_id,
+      _tags: tagsMap[row.external_id] || [],
+    }));
 
     if (upserted.length > 0) {
       await Promise.allSettled(
@@ -132,7 +148,7 @@ export async function POST(request: NextRequest) {
         .in('id', upserted.map((r) => r.id));
     }
 
-    return NextResponse.json({ status: 'synced', citySlug, month, count: upserted.length });
+    return NextResponse.json({ status: 'synced', citySlug, month, count: upserted.length, cached: cachedIds.size });
 
   } catch (err: any) {
     console.error('NTDLV sync error:', err);

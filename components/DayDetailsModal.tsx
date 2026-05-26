@@ -7,6 +7,10 @@ import { createClient } from "@supabase/supabase-js";
 
 dayjs.extend(isSameOrAfter);
 
+// Pull the calendar date out of an ISO timestamp without any timezone conversion.
+const utcDateStr = (ts: string | null | undefined): string =>
+  ts ? ts.substring(0, 10) : '';
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -142,10 +146,11 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
 
   const scaled = (base: number) => ({ fontSize: `calc(${base}px * var(--text-scale, 1))` });
 
+  // Match CalendarGrid's UTC-date bucketing — no timezone conversion, just slice.
   const dayEvents = events.filter((e: any) => {
-    const start = dayjs(e.event_start).format('YYYY-MM-DD');
-    const end = e.event_end ? dayjs(e.event_end).format('YYYY-MM-DD') : start;
-    return activeDay >= start && activeDay <= end;
+    const start = utcDateStr(e.event_start);
+    const end = e.event_end ? utcDateStr(e.event_end) : start;
+    return !!start && activeDay >= start && activeDay <= end;
   });
 
   const aggregateTags = (data: any[]): { name: string; count: number }[] => {

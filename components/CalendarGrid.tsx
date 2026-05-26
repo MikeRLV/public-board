@@ -5,6 +5,12 @@ import { useMemo } from "react";
 
 dayjs.extend(isSameOrBefore);
 
+// Pull the calendar date out of an ISO timestamp without any timezone conversion.
+// All sources (DICE, BIT, TM) store UTC-based dates; slicing the first 10 chars
+// gives the same "event date" that the source platform uses, with no plugin needed.
+const utcDateStr = (ts: string | null | undefined): string =>
+  ts ? ts.substring(0, 10) : '';
+
 interface GridProps {
   currentDate: dayjs.Dayjs;
   todayStr: string;
@@ -18,17 +24,21 @@ export function CalendarGrid({ currentDate, todayStr, activeDay, setActiveDay, f
   const startOffset = currentDate.startOf("month").day();
   const daysInMonth = currentDate.daysInMonth();
 
-  // Group events by day — multi-day events populate every day in their range
+  // Group events by day — multi-day events populate every day in their range.
+  // Use UTC date strings (first 10 chars of ISO timestamp) so every source lands
+  // on the same day the platform uses, with no timezone conversion.
   const eventsByDay = useMemo(() => {
     const map: Record<string, any[]> = {};
     filteredEvents.forEach((event) => {
-      const start = dayjs(event.event_start);
-      const end = event.event_end ? dayjs(event.event_end) : start;
-      let current = start;
+      const startStr = utcDateStr(event.event_start);
+      const endStr = event.event_end ? utcDateStr(event.event_end) : startStr;
+      if (!startStr) return;
+      // Walk from start date to end date (for multi-day events)
+      let current = dayjs(startStr);
+      const end = dayjs(endStr);
       while (current.isSameOrBefore(end, 'day')) {
         const d = current.format("YYYY-MM-DD");
         if (!map[d]) map[d] = [];
-        // Avoid duplicating the same event on the same day
         if (!map[d].find((e: any) => e.id === event.id)) {
           map[d].push(event);
         }
