@@ -8,8 +8,6 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-const CACHE_HOURS = 24;
-
 export async function POST(request: NextRequest) {
   try {
     const { citySlug, month } = await request.json();
@@ -18,26 +16,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'citySlug and month required' }, { status: 400 });
     }
 
-    // Check cache
     const nextMonth = dayjs(`${month}-01`).add(1, 'month').format('YYYY-MM');
-    const cacheThreshold = new Date(Date.now() - CACHE_HOURS * 60 * 60 * 1000).toISOString();
 
-    const { data: existing } = await supabase
+    // Supabase IS the cache — no time-based TTL.
+    // Fetch external_ids already stored for this city/month.
+    const { data: cachedRows } = await supabase
       .from('flyers')
-      .select('cached_at')
+      .select('external_id')
       .eq('source', 'bandsintown')
       .eq('is_cached', true)
       .contains('city_slug', [citySlug])
       .gte('event_start', `${month}-01`)
-      .lt('event_start', `${nextMonth}-01`)
-      .limit(1);
+      .lt('event_start', `${nextMonth}-01`);
 
-    const isFresh = existing?.[0]?.cached_at && existing[0].cached_at > cacheThreshold;
-    if (isFresh) {
-      return NextResponse.json({ status: 'cache_hit', citySlug, month });
-    }
+    const cachedIds = new Set(
+      (cachedRows || []).map((r: any) => r.external_id).filter(Boolean)
+    );
 
-    // Scrape Bandsintown
+    // Scrape Bandsintown (returns upcoming ~36 events; date filter causes 403)
     const scraperBase = process.env.DICE_SCRAPER_URL ?? 'http://localhost:8081';
     const scrapeRes = await fetch(`${scraperBase}/scrape-bandsintown`, {
       method: 'POST',
@@ -50,47 +46,67 @@ export async function POST(request: NextRequest) {
     }
 
     const scrapeData = await scrapeRes.json();
-    const events = scrapeData.events || [];
+    const allEvents: any[] = scrapeData.events || [];
 
-    if (events.length === 0) {
+    if (allEvents.length === 0) {
       return NextResponse.json({ status: 'no_events', citySlug, month });
     }
 
-    // Fetch existing Ticketmaster events for this city to deduplicate against
+    // Compute external_id for each event before filtering
+    const withIds = allEvents.map((e: any) => {
+      const idMatch = e.url?.match(/\/e\/(\d+)-/);
+      const externalId = idMatch ? `bit_${idMatch[1]}` : `bit_${e.name}_${e.startDate}`;
+      return { ...e, _externalId: externalId };
+    });
+
+    // Filter to events in the requested month that aren't already cached
+    const newEvents = withIds.filter((e: any) => {
+      const eventMonth = (e.startDate || '').substring(0, 7);
+      return eventMonth === month && !cachedIds.has(e._externalId);
+    });
+
+    if (newEvents.length === 0) {
+      return NextResponse.json({
+        status: 'no_new_events',
+        citySlug,
+        month,
+        cached: cachedIds.size,
+      });
+    }
+
+    // Deduplicate against existing Ticketmaster events (same artist, same day)
     const { data: tmEvents } = await supabase
       .from('flyers')
       .select('title, event_start')
       .eq('source', 'ticketmaster')
       .contains('city_slug', [citySlug]);
 
-    // Normalize a string to bare alphanumeric for fuzzy comparison
     const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-    // Extract performer name from BIT titles like "Artist @ Venue" or "Artist - Venue"
     const performer = (title: string) => norm(title.split(/[@\-–]/)[0].trim());
 
     const isDuplicate = (bitTitle: string, bitDate: string) => {
       const perf = performer(bitTitle);
-      if (perf.length < 4) return false; // too short to match reliably
+      if (perf.length < 4) return false;
       const day = bitDate.substring(0, 10);
-      return (tmEvents || []).some((tm: any) =>
-        tm.event_start?.substring(0, 10) === day &&
-        norm(tm.title).includes(perf)
+      return (tmEvents || []).some(
+        (tm: any) =>
+          tm.event_start?.substring(0, 10) === day && norm(tm.title).includes(perf)
       );
     };
 
-    const deduped = events.filter((e: any) => !isDuplicate(e.name, e.startDate));
-    console.log(`BIT ${citySlug}: ${events.length} raw, ${deduped.length} after TM dedup`);
+    const deduped = newEvents.filter(
+      (e: any) => !isDuplicate(e.name, e.startDate)
+    );
+    console.log(
+      `BIT ${citySlug} ${month}: ${newEvents.length} new, ${deduped.length} after TM dedup`
+    );
 
     if (deduped.length === 0) {
       return NextResponse.json({ status: 'all_duplicates', citySlug, month });
     }
 
-    // Map MusicEvent JSON-LD to flyer schema
+    // Map to flyer schema
     const flyers = deduped.map((e: any) => {
-      const externalIdMatch = e.url?.match(/\/e\/(\d+)-/);
-      const externalId = externalIdMatch ? `bit_${externalIdMatch[1]}` : `bit_${e.name}_${e.startDate}`;
-
       const extracted = extractTags(e.description, e.name);
       const tags: string[] = ['bandsintown', ...extracted];
 
@@ -103,12 +119,13 @@ export async function POST(request: NextRequest) {
         image_url: e.image || null,
         ticket_url: e.offers?.url || e.url || 'https://bandsintown.com',
         source: 'bandsintown',
-        external_id: externalId,
+        external_id: e._externalId,
         is_cached: false,
         _tags: tags,
       };
     });
 
+    // Upsert new events then apply tags
     const upserted: any[] = [];
     for (const flyer of flyers) {
       const { _tags, ...flyerData } = flyer;
@@ -141,7 +158,13 @@ export async function POST(request: NextRequest) {
         .in('id', upserted.map((r) => r.id));
     }
 
-    return NextResponse.json({ status: 'synced', citySlug, month, count: upserted.length });
+    return NextResponse.json({
+      status: 'synced',
+      citySlug,
+      month,
+      count: upserted.length,
+      cached: cachedIds.size,
+    });
 
   } catch (err: any) {
     console.error('Bandsintown sync error:', err);

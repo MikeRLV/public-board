@@ -8,8 +8,6 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-const CACHE_HOURS = 24;
-
 // Dice category tag remapping
 const DICE_TAG_MAP: Record<string, string> = {
   'gig': 'live-music',
@@ -36,31 +34,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'citySlug and month required' }, { status: 400 });
     }
 
-    // Check cache
     const nextMonth = dayjs(`${month}-01`).add(1, 'month').format('YYYY-MM');
-    const cacheThreshold = new Date(Date.now() - CACHE_HOURS * 60 * 60 * 1000).toISOString();
 
-    const { data: existing } = await supabase
+    // Supabase IS the cache — no time-based TTL.
+    // Fetch the external_ids of events already stored for this city/month.
+    // Any event already here is permanently cached and never re-processed.
+    const { data: cachedRows } = await supabase
       .from('flyers')
-      .select('cached_at')
+      .select('external_id')
       .eq('source', 'dice')
       .eq('is_cached', true)
       .contains('city_slug', [citySlug])
       .gte('event_start', `${month}-01`)
-      .lt('event_start', `${nextMonth}-01`)
-      .limit(1);
+      .lt('event_start', `${nextMonth}-01`);
 
-    const isFresh = existing?.[0]?.cached_at && existing[0].cached_at > cacheThreshold;
-    if (isFresh) {
-      return NextResponse.json({ status: 'cache_hit', citySlug, month });
-    }
+    const cachedIds = new Set(
+      (cachedRows || []).map((r: any) => r.external_id).filter(Boolean)
+    );
 
-    // Ask FastAPI to scrape Dice for this city
+    // Scrape DICE (paginated weekly chunks — handles dense cities like NYC)
     const scraperBase = process.env.DICE_SCRAPER_URL ?? 'http://localhost:8081';
     const scrapeRes = await fetch(`${scraperBase}/scrape-dice`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ city: citySlug.replace(/-/g, ' '), month })
+      body: JSON.stringify({ city: citySlug.replace(/-/g, ' '), month }),
     });
 
     if (!scrapeRes.ok) {
@@ -68,23 +65,30 @@ export async function POST(request: NextRequest) {
     }
 
     const scrapeData = await scrapeRes.json();
-    const events = scrapeData.events || [];
+    const allEvents: any[] = scrapeData.events || [];
 
-    if (events.length === 0) {
-      return NextResponse.json({ status: 'no_events', citySlug, month });
+    // Only process events we haven't seen before
+    const newEvents = allEvents.filter((e: any) => !cachedIds.has(e.id));
+
+    if (newEvents.length === 0) {
+      return NextResponse.json({
+        status: 'no_new_events',
+        citySlug,
+        month,
+        cached: cachedIds.size,
+      });
     }
 
-    // Map and upsert to Supabase
-    const flyers = events.map((e: any) => {
+    // Map new events to flyer schema
+    const flyers = newEvents.map((e: any) => {
       const venue = e.venues?.[0];
       const highlights = e.about?.highlights || [];
-      const ageHighlight = highlights.find((h: any) => h.type === 'age_restriction')?.title || '';
+      const ageHighlight =
+        highlights.find((h: any) => h.type === 'age_restriction')?.title || '';
 
-      // extractTags handles age detection + genre keyword scanning from description text
       const extracted = extractTags(e.about?.description, e.name, ageHighlight);
       const tags: string[] = ['dice', ...extracted];
 
-      // Add Dice category tags, remapping known values (gig → live-music)
       e.tags_types?.forEach((t: any) => {
         if (!t.name) return;
         const mapped = DICE_TAG_MAP[t.name] ?? t.name;
@@ -115,6 +119,7 @@ export async function POST(request: NextRequest) {
       };
     });
 
+    // Upsert new events then apply tags
     const upserted: any[] = [];
     for (const flyer of flyers) {
       const { _tags, ...flyerData } = flyer;
@@ -152,6 +157,7 @@ export async function POST(request: NextRequest) {
       citySlug,
       month,
       count: upserted.length,
+      cached: cachedIds.size,
     });
 
   } catch (err: any) {
