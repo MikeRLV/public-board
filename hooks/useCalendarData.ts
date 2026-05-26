@@ -162,52 +162,57 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
     setUserId(storedId);
   }, []);
 
-  // Full fetch — shows loading spinner, used on initial load
+  // Shared query helper — returns events from Supabase for the current month/city
+  const queryEvents = useCallback(async () => {
+    const monthStart = currentDate.format('YYYY-MM-01');
+    const nextMonth = currentDate.add(1, 'month').format('YYYY-MM-01');
+
+    const citySlug = city ? slugify(city) : null;
+    const allSearchTowns = Array.from(
+      new Set([...activeTowns, citySlug].filter((t): t is string => typeof t === 'string' && t.length > 0))
+    );
+
+    if (allSearchTowns.length === 0) return null;
+
+    const cityFilters = allSearchTowns.map((t: string) => `city_slug.cs.{${t}}`).join(',');
+
+    const { data, error } = await supabase
+      .from('flyers')
+      .select('*, flyer_tags(vote_count, tags(name))')
+      .gte('event_start', monthStart)
+      .lt('event_start', nextMonth)
+      .or(cityFilters);
+
+    if (error) return null;
+    return data ?? [];
+  }, [currentDate, city, activeTowns]);
+
+  // Full fetch — shows loading spinner, used on initial load.
+  // Stale-while-revalidate: keep existing events visible while the query runs
+  // so month navigation never blanks the calendar.
   const fetchEvents = useCallback(async (cancelled = false) => {
     setIsLoading(true);
-    const monthStart = currentDate.format('YYYY-MM-01');
-    const nextMonth = currentDate.add(1, 'month').format('YYYY-MM-01');
+    const data = await queryEvents();
+    if (!cancelled) {
+      if (data !== null) {
+        // Only replace events if the query returned results.
+        // If it returned empty (month not yet synced), keep whatever was
+        // already showing — the sync + 5 s poll will fill it in shortly.
+        setEvents(prev => data.length > 0 ? data : prev);
+      }
+      setIsLoading(false);
+    }
+  }, [queryEvents]);
 
-    const citySlug = city ? slugify(city) : null;
-    const allSearchTowns = Array.from(new Set([...activeTowns, citySlug].filter((t): t is string => typeof t === 'string' && t.length > 0)));
-
-    if (allSearchTowns.length === 0) { setIsLoading(false); return; }
-
-    const cityFilters = allSearchTowns.map((t: string) => `city_slug.cs.{${t}}`).join(',');
-
-    const { data, error } = await supabase
-      .from('flyers')
-      .select('*, flyer_tags(vote_count, tags(name))')
-      .gte('event_start', monthStart)
-      .lt('event_start', nextMonth)
-      .or(cityFilters);
-
-    if (!cancelled && !error && data) setEvents(data);
-    if (!cancelled) setIsLoading(false);
-  }, [currentDate, city, activeTowns]);
-
-  // Silent background fetch — no loading state, just merges new events in
+  // Silent background fetch — no loading state, merges new events in.
+  // Same stale-while-revalidate rule: never blank if DB temporarily returns empty.
   const silentFetch = useCallback(async () => {
     if (!isMountedRef.current) return;
-    const monthStart = currentDate.format('YYYY-MM-01');
-    const nextMonth = currentDate.add(1, 'month').format('YYYY-MM-01');
-
-    const citySlug = city ? slugify(city) : null;
-    const allSearchTowns = Array.from(new Set([...activeTowns, citySlug].filter((t): t is string => typeof t === 'string' && t.length > 0)));
-
-    if (allSearchTowns.length === 0) return;
-
-    const cityFilters = allSearchTowns.map((t: string) => `city_slug.cs.{${t}}`).join(',');
-
-    const { data, error } = await supabase
-      .from('flyers')
-      .select('*, flyer_tags(vote_count, tags(name))')
-      .gte('event_start', monthStart)
-      .lt('event_start', nextMonth)
-      .or(cityFilters);
-
-    if (isMountedRef.current && !error && data) setEvents(data);
-  }, [currentDate, city, activeTowns]);
+    const data = await queryEvents();
+    if (isMountedRef.current && data !== null && data.length > 0) {
+      setEvents(data);
+    }
+  }, [queryEvents]);
 
   const syncPlatforms = async (targets: string[], date: dayjs.Dayjs) => {
     const month = date.format('YYYY-MM');

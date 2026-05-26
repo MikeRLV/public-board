@@ -125,18 +125,25 @@ export async function POST(request: NextRequest) {
       };
     });
 
-    // Upsert new events then apply tags
-    const upserted: any[] = [];
-    for (const flyer of flyers) {
-      const { _tags, ...flyerData } = flyer;
-      const { data, error } = await supabase
-        .from('flyers')
-        .upsert({ ...flyerData, is_cached: false }, { onConflict: 'external_id' })
-        .select('id, external_id')
-        .single();
-      if (error) console.error('BIT upsert failed:', error.message, flyerData.title);
-      if (!error && data) upserted.push({ ...data, _tags });
-    }
+    // Build tags map then batch upsert all new events in one DB call
+    const tagsMap: Record<string, string[]> = {};
+    const flyerDatas = flyers.map(({ _tags, ...flyerData }) => {
+      tagsMap[flyerData.external_id] = _tags || [];
+      return { ...flyerData, is_cached: false };
+    });
+
+    const { data: batchData, error: batchError } = await supabase
+      .from('flyers')
+      .upsert(flyerDatas, { onConflict: 'external_id' })
+      .select('id, external_id');
+
+    if (batchError) console.error('BIT batch upsert failed:', batchError.message);
+
+    const upserted = (batchData || []).map((row: any) => ({
+      id: row.id,
+      external_id: row.external_id,
+      _tags: tagsMap[row.external_id] || [],
+    }));
 
     if (upserted.length > 0) {
       await Promise.allSettled(
