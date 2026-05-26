@@ -8,7 +8,6 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-const CACHE_HOURS = 24;
 const VU_CITY_SLUG = 'las-vegas';
 // Accept both slugs in case users saved either variant
 const LV_SLUGS = ['las-vegas', 'las-vegas-nv'];
@@ -26,42 +25,55 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'month required' }, { status: 400 });
     }
 
-    // Check cache — skip scrape if fresh data exists
     const nextMonth = dayjs(`${month}-01`).add(1, 'month').format('YYYY-MM');
-    const cacheThreshold = new Date(Date.now() - CACHE_HOURS * 60 * 60 * 1000).toISOString();
 
-    const { data: existing } = await supabase
+    // Fetch already-cached events for this month so we can skip re-enriching them.
+    // The scraper will still scrape the listing to detect NEW shows, but won't
+    // call FlareSolverr for URLs we already have — keeping page loads fast.
+    const { data: cachedRows } = await supabase
       .from('flyers')
-      .select('cached_at')
+      .select('ticket_url, external_id')
       .eq('source', 'vegas-underground')
       .eq('is_cached', true)
       .contains('city_slug', [VU_CITY_SLUG])
       .gte('event_start', `${month}-01`)
-      .lt('event_start', `${nextMonth}-01`)
-      .limit(1);
+      .lt('event_start', `${nextMonth}-01`);
 
-    const isFresh = existing?.[0]?.cached_at && existing[0].cached_at > cacheThreshold;
-    if (isFresh) {
-      return NextResponse.json({ status: 'cache_hit', citySlug, month });
-    }
+    const cachedUrls: string[] = (cachedRows || []).map((r: any) => r.ticket_url).filter(Boolean);
+    const cachedExternalIds = new Set((cachedRows || []).map((r: any) => r.external_id).filter(Boolean));
 
-    // Scrape via Python service
+    // Scrape the listing for new shows. Timeout after 45s so a CF block never
+    // hangs the page — cached events still display immediately regardless.
     const scraperBase = process.env.DICE_SCRAPER_URL ?? 'http://localhost:8081';
-    const scrapeRes = await fetch(`${scraperBase}/scrape-vegas-underground`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ city: 'las vegas', month }),
-    });
-
-    if (!scrapeRes.ok) {
-      return NextResponse.json({ status: 'scrape_error', code: scrapeRes.status });
+    let scrapeData: any = null;
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 45000);
+      const scrapeRes = await fetch(`${scraperBase}/scrape-vegas-underground`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ city: 'las vegas', month, skip_urls: cachedUrls }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (scrapeRes.ok) scrapeData = await scrapeRes.json();
+    } catch (e: any) {
+      if (e.name === 'AbortError') {
+        return NextResponse.json({ status: 'scrape_timeout', citySlug, month, cached: cachedUrls.length });
+      }
+      return NextResponse.json({ status: 'scrape_error', message: e.message });
     }
 
-    const scrapeData = await scrapeRes.json();
-    const events: any[] = scrapeData.events || [];
+    const events: any[] = (scrapeData?.events || [])
+      .filter((e: any) => {
+        // Only process events we haven't seen before
+        const slug = (e.url || '').split('/vegasunderground/').pop() || '';
+        const externalId = `vu_${slug || e.name?.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+        return !cachedExternalIds.has(externalId);
+      });
 
     if (events.length === 0) {
-      return NextResponse.json({ status: 'no_events', citySlug, month });
+      return NextResponse.json({ status: 'no_new_events', citySlug, month, cached: cachedUrls.length });
     }
 
     // Map to flyer schema
