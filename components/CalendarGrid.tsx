@@ -33,9 +33,13 @@ export function CalendarGrid({ currentDate, todayStr, activeDay, setActiveDay, f
       const startStr = utcDateStr(event.event_start);
       const endStr = event.event_end ? utcDateStr(event.event_end) : startStr;
       if (!startStr) return;
-      // Walk from start date to end date (for multi-day events)
-      let current = dayjs(startStr);
-      const end = dayjs(endStr);
+      // Walk from start date to end date (for multi-day events).
+      // Append T12:00:00 so dayjs treats these as local noon, not UTC midnight.
+      // dayjs('YYYY-MM-DD') parses as UTC midnight, and .format() then renders
+      // in local time — shifting dates like 2026-07-06T00:00:00Z to July 5 in EDT.
+      // Using noon avoids that entirely: noon local is the same calendar day in any timezone.
+      let current = dayjs(`${startStr}T12:00:00`);
+      const end = dayjs(`${endStr}T12:00:00`);
       while (current.isSameOrBefore(end, 'day')) {
         const d = current.format("YYYY-MM-DD");
         if (!map[d]) map[d] = [];
