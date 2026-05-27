@@ -8,6 +8,15 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+// Module-level cache — survives component unmount/remount within the same browser tab.
+// Navigating away and back is instant: cached data shows immediately, then refreshes silently.
+// Key: "citySlug:YYYY-MM"
+const eventsCache = new Map<string, any[]>();
+const _slugifyCache = (text: string) =>
+  text.toLowerCase().trim().replace(/[\s_]+/g, '-').replace(/[^\w-+]+/g, '').replace(/--+/g, '-').replace(/^-+|-+$/g, '');
+const cacheKey = (city: string, date: dayjs.Dayjs) =>
+  `${_slugifyCache(city)}:${date.format('YYYY-MM')}`;
+
 export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialLocals: string[] = [], initialTags: string[] = []) {
   const slugify = (text: string) => 
     text.toLowerCase().trim().replace(/[\s_]+/g, "-").replace(/[^\w-+]+/g, "").replace(/--+/g, "-").replace(/^-+|-+$/g, "");
@@ -199,10 +208,11 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
         // If it returned empty (month not yet synced), keep whatever was
         // already showing — the sync + 5 s poll will fill it in shortly.
         setEvents(prev => data.length > 0 ? data : prev);
+        if (data.length > 0) eventsCache.set(cacheKey(city, currentDate), data);
       }
       setIsLoading(false);
     }
-  }, [queryEvents]);
+  }, [queryEvents, city, currentDate]);
 
   // Silent background fetch — no loading state, merges new events in.
   // Same stale-while-revalidate rule: never blank if DB temporarily returns empty.
@@ -211,8 +221,9 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
     const data = await queryEvents();
     if (isMountedRef.current && data !== null && data.length > 0) {
       setEvents(data);
+      eventsCache.set(cacheKey(city, currentDate), data);
     }
-  }, [queryEvents]);
+  }, [queryEvents, city, currentDate]);
 
   const syncPlatforms = async (targets: string[], date: dayjs.Dayjs) => {
     const month = date.format('YYYY-MM');
@@ -303,25 +314,49 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
         ? activeTowns
         : city ? [slugify(city)] : [];
 
-      // 1. Show whatever is already in Supabase immediately
+      // 1. Restore from in-memory cache instantly — no blank flash on re-visit
+      const key = cacheKey(city, currentDate);
+      const cached = eventsCache.get(key);
+      if (cached && cached.length > 0) {
+        setEvents(cached);
+        setIsLoading(false);
+
+        // Still pre-sync adjacent months and silently refresh current month
+        preSyncMonth(targets, currentDate.subtract(1, 'month'));
+        preSyncMonth(targets, currentDate.add(1, 'month'));
+        preSyncMonth(targets, currentDate.add(2, 'month'));
+        preSyncMonth(targets, currentDate.add(3, 'month'));
+
+        pollInterval = setInterval(() => {
+          if (!cancelled) silentFetch();
+        }, 5000);
+
+        await syncPlatforms(targets, currentDate);
+
+        if (pollInterval) clearInterval(pollInterval);
+        if (!cancelled) silentFetch();
+        return;
+      }
+
+      // 2. No cache — first visit: show whatever is already in Supabase immediately
       await fetchEvents(cancelled);
       if (cancelled) return;
 
-      // 2. Pre-sync adjacent months in background (fire and forget)
+      // 3. Pre-sync adjacent months in background (fire and forget)
       preSyncMonth(targets, currentDate.subtract(1, 'month'));
       preSyncMonth(targets, currentDate.add(1, 'month'));
       preSyncMonth(targets, currentDate.add(2, 'month'));
       preSyncMonth(targets, currentDate.add(3, 'month'));
 
-      // 3. Start polling silently every 5s so events appear as they land
+      // 4. Start polling silently every 5s so events appear as they land
       pollInterval = setInterval(() => {
         if (!cancelled) silentFetch();
       }, 5000);
 
-      // 4. Sync current month — wait for it to finish
+      // 5. Sync current month — wait for it to finish
       await syncPlatforms(targets, currentDate);
 
-      // 5. Stop polling, do one final silent fetch to catch anything last
+      // 6. Stop polling, do one final silent fetch to catch anything last
       if (pollInterval) clearInterval(pollInterval);
       if (!cancelled) silentFetch();
     };
