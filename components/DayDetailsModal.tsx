@@ -152,10 +152,16 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
   const scaled = (base: number) => ({ fontSize: `calc(${base}px * var(--text-scale, 1))` });
 
   // Match CalendarGrid's NYC-date bucketing — use America/New_York local date.
+  // Deduplicate by title per day: same show listed multiple times (different ticket
+  // tiers, early/late sets) should only appear once.
+  const seenTitles = new Set<string>();
   const dayEvents = events.filter((e: any) => {
     const start = nycDateStr(e.event_start);
     const end = e.event_end ? nycDateStr(e.event_end) : start;
-    return !!start && activeDay >= start && activeDay <= end;
+    if (!start || !(activeDay >= start && activeDay <= end)) return false;
+    if (seenTitles.has(e.title)) return false;
+    seenTitles.add(e.title);
+    return true;
   });
 
   const aggregateTags = (data: any[]): { name: string; count: number }[] => {

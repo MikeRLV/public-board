@@ -47,7 +47,7 @@ export function CalendarGrid({ currentDate, todayStr, activeDay, setActiveDay, f
       while (current.isSameOrBefore(end, 'day')) {
         const d = current.format("YYYY-MM-DD");
         if (!map[d]) map[d] = [];
-        if (!map[d].find((e: any) => e.id === event.id)) {
+        if (!map[d].find((e: any) => e.id === event.id || e.title === event.title)) {
           map[d].push(event);
         }
         current = current.add(1, 'day');
