@@ -7,9 +7,14 @@ import { createClient } from "@supabase/supabase-js";
 
 dayjs.extend(isSameOrAfter);
 
-// Pull the calendar date out of an ISO timestamp without any timezone conversion.
-const utcDateStr = (ts: string | null | undefined): string =>
-  ts ? ts.substring(0, 10) : '';
+// Extract the event's calendar date in America/New_York local time.
+// DICE stores times with EDT offset; Supabase converts to UTC.
+// e.g. "2026-07-13T20:30:00-04:00" → "2026-07-14T00:30:00+00:00" UTC.
+// Using NYC local date ensures 8:30 PM EDT shows on July 13, not July 14.
+const nycDateStr = (ts: string | null | undefined): string => {
+  if (!ts) return '';
+  return new Date(ts).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+};
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -146,10 +151,10 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
 
   const scaled = (base: number) => ({ fontSize: `calc(${base}px * var(--text-scale, 1))` });
 
-  // Match CalendarGrid's UTC-date bucketing — no timezone conversion, just slice.
+  // Match CalendarGrid's NYC-date bucketing — use America/New_York local date.
   const dayEvents = events.filter((e: any) => {
-    const start = utcDateStr(e.event_start);
-    const end = e.event_end ? utcDateStr(e.event_end) : start;
+    const start = nycDateStr(e.event_start);
+    const end = e.event_end ? nycDateStr(e.event_end) : start;
     return !!start && activeDay >= start && activeDay <= end;
   });
 

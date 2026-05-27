@@ -5,11 +5,15 @@ import { useMemo } from "react";
 
 dayjs.extend(isSameOrBefore);
 
-// Pull the calendar date out of an ISO timestamp without any timezone conversion.
-// All sources (DICE, BIT, TM) store UTC-based dates; slicing the first 10 chars
-// gives the same "event date" that the source platform uses, with no plugin needed.
-const utcDateStr = (ts: string | null | undefined): string =>
-  ts ? ts.substring(0, 10) : '';
+// Extract the event's calendar date in America/New_York local time.
+// DICE (and most sources) store times with EDT/EST offsets; Supabase converts to UTC.
+// e.g. "2026-07-13T20:30:00-04:00" → stored as "2026-07-14T00:30:00+00:00" in UTC.
+// substring(0,10) would give July 14 (wrong). NYC local date gives July 13 (correct).
+// en-CA locale returns dates in YYYY-MM-DD format natively.
+const nycDateStr = (ts: string | null | undefined): string => {
+  if (!ts) return '';
+  return new Date(ts).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+};
 
 interface GridProps {
   currentDate: dayjs.Dayjs;
@@ -25,13 +29,13 @@ export function CalendarGrid({ currentDate, todayStr, activeDay, setActiveDay, f
   const daysInMonth = currentDate.daysInMonth();
 
   // Group events by day — multi-day events populate every day in their range.
-  // Use UTC date strings (first 10 chars of ISO timestamp) so every source lands
-  // on the same day the platform uses, with no timezone conversion.
+  // Use America/New_York local date so events like 8:30 PM EDT (midnight UTC)
+  // land on the correct calendar day, not the UTC-shifted next day.
   const eventsByDay = useMemo(() => {
     const map: Record<string, any[]> = {};
     filteredEvents.forEach((event) => {
-      const startStr = utcDateStr(event.event_start);
-      const endStr = event.event_end ? utcDateStr(event.event_end) : startStr;
+      const startStr = nycDateStr(event.event_start);
+      const endStr = event.event_end ? nycDateStr(event.event_end) : startStr;
       if (!startStr) return;
       // Walk from start date to end date (for multi-day events).
       // Append T12:00:00 so dayjs treats these as local noon, not UTC midnight.

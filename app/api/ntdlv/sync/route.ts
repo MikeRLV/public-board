@@ -120,7 +120,10 @@ export async function POST(request: NextRequest) {
       .upsert(flyerDatas, { onConflict: 'external_id' })
       .select('id, external_id');
 
-    if (batchError) console.error('NTDLV batch upsert failed:', batchError.message);
+    if (batchError) {
+      console.error('NTDLV batch upsert failed:', batchError.message);
+      return NextResponse.json({ status: 'upsert_error', error: batchError.message, citySlug, month }, { status: 500 });
+    }
 
     const upserted = (batchData || []).map((row: any) => ({
       id: row.id,
