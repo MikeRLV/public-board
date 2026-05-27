@@ -20,6 +20,25 @@ const CATEGORIES = ['KZFzniwnSyZfZ7v7nJ', 'KZFzniwnSyZfZ7v7nE', 'KZFzniwnSyZfZ7v
 // Family: KZFzniwnSyZfZ7v7n1
 // Sports: KZFzniwnSyZfZ7v7nE (excluded by default)
 
+// City slug → TM state code for disambiguation (e.g. Las Vegas, NV not NM)
+const TM_STATE_CODES: Record<string, string> = {
+  'las-vegas':    'NV',
+  'las-vegas-nv': 'NV',
+  'new-york':     'NY',
+  'new-york-city':'NY',
+  'los-angeles':  'CA',
+  'chicago':      'IL',
+  'nashville':    'TN',
+  'miami':        'FL',
+  'austin':       'TX',
+  'seattle':      'WA',
+  'denver':       'CO',
+  'portland':     'OR',
+  'boston':       'MA',
+  'atlanta':      'GA',
+  'philadelphia': 'PA',
+};
+
 async function fetchTicketmasterEvents(citySlug: string, month: string) {
   const [year, monthNum] = month.split('-');
   const startDate = `${year}-${monthNum}-01T00:00:00Z`;
@@ -27,24 +46,43 @@ async function fetchTicketmasterEvents(citySlug: string, month: string) {
   const endDate = `${year}-${monthNum}-${String(lastDay).padStart(2, '0')}T23:59:59Z`;
 
   const cityName = citySlug.replace(/-/g, ' ');
+  const stateCode = TM_STATE_CODES[citySlug];
   const allEvents: any[] = [];
+  const seenIds = new Set<string>();
 
   for (const segmentId of CATEGORIES) {
-    const url = new URL('https://app.ticketmaster.com/discovery/v2/events.json');
-    url.searchParams.set('apikey', TM_KEY);
-    url.searchParams.set('city', cityName);
-    url.searchParams.set('segmentId', segmentId);
-    url.searchParams.set('startDateTime', startDate);
-    url.searchParams.set('endDateTime', endDate);
-    url.searchParams.set('size', '200');
-    url.searchParams.set('sort', 'date,asc');
+    let page = 0;
+    const pageSize = 200;
 
-    const res = await fetch(url.toString());
-    if (!res.ok) continue;
+    while (true) {
+      const url = new URL('https://app.ticketmaster.com/discovery/v2/events.json');
+      url.searchParams.set('apikey', TM_KEY);
+      url.searchParams.set('city', cityName);
+      if (stateCode) url.searchParams.set('stateCode', stateCode);
+      url.searchParams.set('segmentId', segmentId);
+      url.searchParams.set('startDateTime', startDate);
+      url.searchParams.set('endDateTime', endDate);
+      url.searchParams.set('size', String(pageSize));
+      url.searchParams.set('page', String(page));
+      url.searchParams.set('sort', 'date,asc');
 
-    const data = await res.json();
-    const events = data._embedded?.events || [];
-    allEvents.push(...events);
+      const res = await fetch(url.toString());
+      if (!res.ok) break;
+
+      const data = await res.json();
+      const events: any[] = data._embedded?.events || [];
+
+      for (const e of events) {
+        if (!seenIds.has(e.id)) {
+          seenIds.add(e.id);
+          allEvents.push(e);
+        }
+      }
+
+      const totalPages = data.page?.totalPages ?? 1;
+      if (page + 1 >= totalPages || events.length === 0) break;
+      page++;
+    }
   }
 
   return allEvents;
@@ -120,22 +158,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'citySlug and month required' }, { status: 400 });
     }
 
-    // Check if cache is fresh
-    const cacheThreshold = new Date(Date.now() - CACHE_HOURS * 60 * 60 * 1000).toISOString();
     const nextMonth = dayjs(`${month}-01`).add(1, 'month').format('YYYY-MM');
-    const { data: existing } = await supabase
+
+    // Cache check: skip only if we have a recent sync AND a healthy event count.
+    // A single-event check is too weak — a prior truncated sync (hit the 200 cap)
+    // would mark the month as "done" and miss the rest of the month for 24 hours.
+    const cacheThreshold = new Date(Date.now() - CACHE_HOURS * 60 * 60 * 1000).toISOString();
+    const { count: cachedCount, data: latestCached } = await supabase
       .from('flyers')
-      .select('cached_at, is_cached')
+      .select('cached_at', { count: 'exact', head: false })
       .eq('source', 'ticketmaster')
       .eq('is_cached', true)
       .contains('city_slug', [citySlug])
       .gte('event_start', `${month}-01`)
       .lt('event_start', `${nextMonth}-01`)
+      .order('cached_at', { ascending: false })
       .limit(1);
 
-    const isFresh = existing?.[0]?.cached_at && existing[0].cached_at > cacheThreshold;
+    const lastCachedAt = latestCached?.[0]?.cached_at;
+    // Consider cache fresh only if: synced recently AND we have ≥10 events cached
+    // (guards against a prior empty/truncated run locking out a real sync)
+    const isFresh = lastCachedAt && lastCachedAt > cacheThreshold && (cachedCount ?? 0) >= 10;
     if (isFresh) {
-      return NextResponse.json({ status: 'cache_hit', citySlug, month });
+      return NextResponse.json({ status: 'cache_hit', citySlug, month, cached: cachedCount });
     }
 
     // Fetch from Ticketmaster
