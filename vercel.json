@@ -1,0 +1,22 @@
+{
+  "functions": {
+    "app/api/eventbrite/sync/route.ts": {
+      "maxDuration": 300
+    },
+    "app/api/dice/sync/route.ts": {
+      "maxDuration": 300
+    },
+    "app/api/ticketmaster/sync/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/bandsintown/sync/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/ntdlv/sync/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/vegas-underground/sync/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}

@@ -10,7 +10,6 @@ const supabase = createClient(
 
 // Map Eventbrite category/subcategory/format strings → our normalized tag names.
 // null = drop the tag (too generic to be useful).
-// Eventbrite sends these as slugified display names, e.g. "Hip Hop / Rap" → "hip-hop-rap".
 const EB_TAG_MAP: Record<string, string | null> = {
   // Top-level categories
   'music':                        'live-music',
@@ -89,11 +88,24 @@ function mapEbTags(rawTags: string[]): string[] {
       const mapped = EB_TAG_MAP[key];
       if (mapped) out.push(mapped);
     } else {
-      // Unknown tag — pass through as-is (might be useful)
       out.push(key);
     }
   }
   return out;
+}
+
+/** Fire at most `concurrency` promises at a time */
+async function pLimit<T>(
+  tasks: (() => Promise<T>)[],
+  concurrency: number
+): Promise<PromiseSettledResult<T>[]> {
+  const results: PromiseSettledResult<T>[] = [];
+  for (let i = 0; i < tasks.length; i += concurrency) {
+    const batch = tasks.slice(i, i + concurrency).map(fn => fn());
+    const settled = await Promise.allSettled(batch);
+    results.push(...settled);
+  }
+  return results;
 }
 
 export async function POST(request: NextRequest) {
@@ -106,8 +118,10 @@ export async function POST(request: NextRequest) {
 
     const nextMonth = dayjs(`${month}-01`).add(1, 'month').format('YYYY-MM');
 
+    console.log(`[EB] Starting sync: ${citySlug} ${month}`);
+
     // Supabase IS the cache — fetch already-stored external_ids for this city/month.
-    const { data: cachedRows } = await supabase
+    const { data: cachedRows, error: cacheErr } = await supabase
       .from('flyers')
       .select('external_id')
       .eq('source', 'eventbrite')
@@ -116,12 +130,19 @@ export async function POST(request: NextRequest) {
       .gte('event_start', `${month}-01`)
       .lt('event_start', `${nextMonth}-01`);
 
+    if (cacheErr) {
+      console.error('[EB] Cache query failed:', cacheErr.message);
+    }
+
     const cachedIds = new Set(
       (cachedRows || []).map((r: any) => r.external_id).filter(Boolean)
     );
+    console.log(`[EB] Cached IDs for ${citySlug} ${month}: ${cachedIds.size}`);
 
     // Scrape via Python service
     const scraperBase = process.env.DICE_SCRAPER_URL ?? 'http://localhost:8081';
+    console.log(`[EB] Calling scraper at ${scraperBase}/scrape-eventbrite`);
+
     const scrapeRes = await fetch(`${scraperBase}/scrape-eventbrite`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -129,13 +150,14 @@ export async function POST(request: NextRequest) {
     });
 
     if (!scrapeRes.ok) {
+      console.error(`[EB] Scraper HTTP error: ${scrapeRes.status}`);
       return NextResponse.json({ status: 'scrape_error', code: scrapeRes.status });
     }
 
     const scrapeData = await scrapeRes.json();
+    console.log(`[EB] Scraper response status: ${scrapeData.status}, event_count: ${scrapeData.event_count}`);
+
     if (scrapeData.status === 'error') {
-      // Dynamic place ID lookup failed (e.g. no events found for probe search)
-      // Treat as not_applicable rather than a hard error
       if (scrapeData.message?.includes('Could not resolve Eventbrite place ID')) {
         return NextResponse.json({ status: 'not_applicable', citySlug });
       }
@@ -143,6 +165,12 @@ export async function POST(request: NextRequest) {
     }
 
     const allEvents: any[] = scrapeData.events || [];
+    console.log(`[EB] Total events from scraper: ${allEvents.length}`);
+
+    if (allEvents.length > 0) {
+      const sample = allEvents[0];
+      console.log(`[EB] Sample event fields: external_id=${sample.external_id}, startDate=${sample.startDate}, name="${sample.name}"`);
+    }
 
     if (allEvents.length === 0) {
       return NextResponse.json({ status: 'no_events', citySlug, month });
@@ -150,25 +178,24 @@ export async function POST(request: NextRequest) {
 
     // Only process events not already cached
     const newEvents = allEvents.filter((e: any) => !cachedIds.has(e.external_id));
+    console.log(`[EB] New events (not cached): ${newEvents.length}`);
 
     if (newEvents.length === 0) {
       return NextResponse.json({ status: 'no_new_events', citySlug, month, cached: cachedIds.size });
     }
 
+    // Cap at 200 events per sync run to stay within function timeout.
+    // The next navigation will pick up remaining events.
+    const eventsToProcess = newEvents.slice(0, 200);
+    if (eventsToProcess.length < newEvents.length) {
+      console.log(`[EB] Capping at 200 events (${newEvents.length} total new)`);
+    }
+
     // Map to flyer schema
-    const flyers = newEvents.map((e: any) => {
-      // Layer 1: normalize Eventbrite category tags via EB_TAG_MAP
+    const flyers = eventsToProcess.map((e: any) => {
       const categoryTags = mapEbTags(e._tags || []);
-
-      // Layer 2: extract genre/age tags from description + title text
       const extracted = extractTags(e.description, e.name);
-
-      // Combine: source tag first, then categories, then text-extracted tags
-      const tags: string[] = [
-        'eventbrite',
-        ...categoryTags,
-        ...extracted,
-      ];
+      const tags: string[] = ['eventbrite', ...categoryTags, ...extracted];
 
       return {
         title: e.name,
@@ -187,7 +214,10 @@ export async function POST(request: NextRequest) {
       };
     }).filter((f: any) => f.event_start);
 
+    console.log(`[EB] Events with valid start date: ${flyers.length} of ${eventsToProcess.length}`);
+
     if (flyers.length === 0) {
+      console.error('[EB] All events filtered out — no valid event_start dates. Sample startDate:', eventsToProcess[0]?.startDate);
       return NextResponse.json({ status: 'no_valid_dates', citySlug, month });
     }
 
@@ -198,14 +228,19 @@ export async function POST(request: NextRequest) {
       return { ...flyerData, is_cached: false };
     });
 
+    console.log(`[EB] Upserting ${flyerDatas.length} events to Supabase...`);
+
     const { data: batchData, error: batchError } = await supabase
       .from('flyers')
       .upsert(flyerDatas, { onConflict: 'external_id' })
       .select('id, external_id');
 
     if (batchError) {
-      console.error('Eventbrite batch upsert failed:', batchError.message);
-      return NextResponse.json({ status: 'upsert_error', error: batchError.message, citySlug, month }, { status: 500 });
+      console.error('[EB] Batch upsert failed:', batchError.message, JSON.stringify(batchError));
+      return NextResponse.json(
+        { status: 'upsert_error', error: batchError.message, citySlug, month },
+        { status: 500 }
+      );
     }
 
     const upserted = (batchData || []).map((row: any) => ({
@@ -214,19 +249,23 @@ export async function POST(request: NextRequest) {
       _tags: tagsMap[row.external_id] || [],
     }));
 
+    console.log(`[EB] Upserted: ${upserted.length} rows`);
+
     if (upserted.length > 0) {
-      await Promise.allSettled(
-        upserted.flatMap(({ id, _tags }) =>
-          (_tags || []).map((tagName: string) =>
-            supabase.rpc('vote_on_tag', {
-              target_flyer_id: id,
-              target_tag_name: tagName,
-              vote_val: 1,
-              voter_id: 'eventbrite-import',
-            })
-          )
+      // Vote on tags — batched at 25 concurrent to avoid overwhelming Supabase
+      const tagTasks = upserted.flatMap(({ id, _tags }) =>
+        (_tags || []).map((tagName: string) => () =>
+          supabase.rpc('vote_on_tag', {
+            target_flyer_id: id,
+            target_tag_name: tagName,
+            vote_val: 1,
+            voter_id: 'eventbrite-import',
+          })
         )
       );
+
+      console.log(`[EB] Voting on ${tagTasks.length} tags (batched 25 concurrent)...`);
+      await pLimit(tagTasks, 25);
 
       await supabase
         .from('flyers')
@@ -234,7 +273,7 @@ export async function POST(request: NextRequest) {
         .in('id', upserted.map((r) => r.id));
     }
 
-    console.log(`EB ${citySlug} ${month}: ${newEvents.length} new, ${upserted.length} upserted`);
+    console.log(`[EB] Done: ${citySlug} ${month} — ${newEvents.length} new, ${upserted.length} upserted`);
 
     return NextResponse.json({
       status: 'synced',
@@ -245,7 +284,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (err: any) {
-    console.error('Eventbrite sync error:', err);
+    console.error('[EB] Sync error:', err.message, err.stack);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
