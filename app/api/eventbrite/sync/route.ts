@@ -6,6 +6,18 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+// Fetch with one retry on 502 (cloudflared burst saturation).
+// Random jitter spreads simultaneous retries when all months fire at once.
+async function fetchWithRetry(url: string, options: RequestInit): Promise<Response> {
+  const res = await fetch(url, options);
+  if (res.status === 502) {
+    const jitter = 1000 + Math.random() * 2000; // 1–3 s
+    await new Promise(r => setTimeout(r, jitter));
+    return fetch(url, options);
+  }
+  return res;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { citySlug, month } = await request.json();
@@ -20,7 +32,7 @@ export async function POST(request: NextRequest) {
     // background asyncio task.  It returns {"status":"started"} in < 1 second so
     // the Cloudflare tunnel never hits its 30-second origin-response timeout.
     const scraperBase = process.env.DICE_SCRAPER_URL ?? 'http://localhost:8081';
-    const scrapeRes = await fetch(`${scraperBase}/scrape-eventbrite`, {
+    const scrapeRes = await fetchWithRetry(`${scraperBase}/scrape-eventbrite`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ city: citySlug.replace(/-/g, ' '), month }),
