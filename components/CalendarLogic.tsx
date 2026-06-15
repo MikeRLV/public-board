@@ -33,7 +33,7 @@ export function CalendarLogic({ city, initialLocals = [], initialTags = [] }: { 
   };
 
   const {
-    userId, events, filteredEvents, weightedTags, weightedLocals, allTimeTags,
+    userId, events, isSyncing, filteredEvents, weightedTags, weightedLocals, allTimeTags,
     savedLocations, activeTags, setActiveTags,
     activeTowns, setActiveTowns, filterMode, setFilterMode, showAllEvents, setShowAllEvents,
     excludeMode, setExcludeMode,
@@ -135,10 +135,11 @@ export function CalendarLogic({ city, initialLocals = [], initialTags = [] }: { 
       />
       
       <div className="flex-1 flex flex-col h-screen overflow-visible">
-        <CalendarHeader 
-          currentDate={currentDate} 
-          setCurrentDate={setCurrentDate} 
-          activeTowns={activeTowns} 
+        <CalendarHeader
+          currentDate={currentDate}
+          setCurrentDate={setCurrentDate}
+          isSyncing={isSyncing}
+          activeTowns={activeTowns}
           setActiveTowns={setActiveTowns} 
           onMenuClick={() => setIsSidebarOpen(true)} 
           onRefresh={() => {

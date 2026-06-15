@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 import dayjs from "dayjs";
 
@@ -23,6 +23,9 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
 
   const [events, setEvents] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  // True while the current viewed month is still being scraped (events may keep
+  // arriving). Drives the "searching" spinner. Only ever reflects the month in view.
+  const [isSyncing, setIsSyncing] = useState(false);
   const [userId, setUserId] = useState<string>("");
   const [weightedTags, setWeightedTags] = useState<{name: string, weight: number}[]>([]);
   const [weightedLocals, setWeightedLocals] = useState<{name: string, weight: number}[]>([]); 
@@ -43,13 +46,6 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
   useEffect(() => {
     if (!showAllEvents) setExcludeMode(false);
   }, [showAllEvents]);
-
-  // Ref so background fetches can check if still mounted without triggering re-renders
-  const isMountedRef = useRef(true);
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
-  }, []);
 
   useEffect(() => {
     const fetchLocals = async () => {
@@ -214,17 +210,6 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
     }
   }, [queryEvents, city, currentDate]);
 
-  // Silent background fetch — no loading state, merges new events in.
-  // Same stale-while-revalidate rule: never blank if DB temporarily returns empty.
-  const silentFetch = useCallback(async () => {
-    if (!isMountedRef.current) return;
-    const data = await queryEvents();
-    if (isMountedRef.current && data !== null && data.length > 0) {
-      setEvents(data);
-      eventsCache.set(cacheKey(city, currentDate), data);
-    }
-  }, [queryEvents, city, currentDate]);
-
   const syncPlatforms = async (targets: string[], date: dayjs.Dayjs) => {
     const month = date.format('YYYY-MM');
     if (targets.length === 0) return;
@@ -319,62 +304,78 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
     let cancelled = false;
     let pollInterval: ReturnType<typeof setInterval> | null = null;
 
-    const run = async () => {
-      const targets = activeTowns.length > 0
-        ? activeTowns
-        : city ? [slugify(city)] : [];
+    const targets = activeTowns.length > 0
+      ? activeTowns
+      : city ? [slugify(city)] : [];
+    const key = cacheKey(city, currentDate);
 
-      // 1. Restore from in-memory cache instantly — no blank flash on re-visit
-      const key = cacheKey(city, currentDate);
+    // Reflect "searching" for the month in view immediately — but only if there's
+    // actually something to scrape (a city/LoCAL selected).
+    setIsSyncing(targets.length > 0);
+
+    const stop = () => {
+      if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+    };
+
+    const run = async () => {
+      // 1. Instant cache restore — no blank flash; else show whatever's in Supabase
       const cached = eventsCache.get(key);
       if (cached && cached.length > 0) {
         setEvents(cached);
         setIsLoading(false);
-
-        // Still pre-sync adjacent months and silently refresh current month
-        preSyncMonth(targets, currentDate.subtract(1, 'month'));
-        preSyncMonth(targets, currentDate.add(1, 'month'));
-        preSyncMonth(targets, currentDate.add(2, 'month'));
-        preSyncMonth(targets, currentDate.add(3, 'month'));
-
-        pollInterval = setInterval(() => {
-          if (!cancelled) silentFetch();
-        }, 5000);
-
-        await syncPlatforms(targets, currentDate);
-
-        if (pollInterval) clearInterval(pollInterval);
-        if (!cancelled) silentFetch();
-        return;
+      } else {
+        await fetchEvents(cancelled);
+        if (cancelled) return;
       }
 
-      // 2. No cache — first visit: show whatever is already in Supabase immediately
-      await fetchEvents(cancelled);
-      if (cancelled) return;
+      // Nothing to scrape → no spinner, nothing to poll
+      if (targets.length === 0) { setIsSyncing(false); return; }
 
-      // 3. Pre-sync adjacent months in background (fire and forget)
+      // 2. Pre-sync adjacent months in the background (no spinner for these)
       preSyncMonth(targets, currentDate.subtract(1, 'month'));
       preSyncMonth(targets, currentDate.add(1, 'month'));
       preSyncMonth(targets, currentDate.add(2, 'month'));
       preSyncMonth(targets, currentDate.add(3, 'month'));
 
-      // 4. Start polling silently every 5s so events appear as they land
-      pollInterval = setInterval(() => {
-        if (!cancelled) silentFetch();
+      // 3. Trigger the current-month scrape (fire-and-forget; we poll for results)
+      syncPlatforms(targets, currentDate);
+
+      // 4. Poll for results while the scrape runs. Keep the spinner up until the
+      //    event count settles (no change for a few polls AFTER events appear) or
+      //    we hit a hard cap — so late-arriving events still land in the calendar.
+      const MAX_POLLS = 12;     // ~60s hard cap
+      const STABLE_POLLS = 3;   // ~15s with no new events => consider it done
+      let polls = 0;
+      let lastCount = cached?.length ?? 0;
+      let sawEvents = lastCount > 0;
+      let stable = 0;
+
+      pollInterval = setInterval(async () => {
+        if (cancelled) return;
+        polls++;
+        const data = await queryEvents();
+        if (data !== null) {
+          if (data.length > 0) {
+            setEvents(data);
+            eventsCache.set(key, data);
+            sawEvents = true;
+          }
+          if (data.length === lastCount) { stable++; }
+          else { stable = 0; lastCount = data.length; }
+        } else {
+          stable++;
+        }
+        if ((sawEvents && stable >= STABLE_POLLS) || polls >= MAX_POLLS) {
+          stop();
+          if (!cancelled) setIsSyncing(false);
+        }
       }, 5000);
-
-      // 5. Sync current month — wait for it to finish
-      await syncPlatforms(targets, currentDate);
-
-      // 6. Stop polling, do one final silent fetch to catch anything last
-      if (pollInterval) clearInterval(pollInterval);
-      if (!cancelled) silentFetch();
     };
 
     run();
     return () => {
       cancelled = true;
-      if (pollInterval) clearInterval(pollInterval);
+      stop();
     };
   }, [currentDate, city, activeTowns]);
 
@@ -441,10 +442,11 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
   }, [events, activeTags, activeTowns, city, filterMode, showAllEvents, excludeMode, showSpam]);
 
   return {
-    userId, 
+    userId,
     events,
     isLoading,
-    filteredEvents, 
+    isSyncing,
+    filteredEvents,
     weightedTags,
     allTimeTags,
     weightedLocals,

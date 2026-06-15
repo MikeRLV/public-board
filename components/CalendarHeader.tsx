@@ -4,7 +4,8 @@ import dayjs from "dayjs";
 import localeData from "dayjs/plugin/localeData";
 import { useSidebarLogic } from "../hooks/useSidebarLogic";
 import { MonthYearPicker } from "./MonthYearPicker";
-import { BrandLogo } from "./BrandLogo"; 
+import { BrandLogo } from "./BrandLogo";
+import { SearchingSpinner } from "./SearchingSpinner";
 
 dayjs.extend(localeData);
 
@@ -51,7 +52,7 @@ function ThemeLab({ customColors, onColorChange, onApplyPreset, theme, setTheme,
 }
 
 // 2. MAIN HEADER
-export function CalendarHeader({ currentDate, setCurrentDate, activeTowns = [], onMenuClick, setActiveTowns, onRefresh, ...props }: any) {
+export function CalendarHeader({ currentDate, setCurrentDate, isSyncing = false, activeTowns = [], onMenuClick, setActiveTowns, onRefresh, ...props }: any) {
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
   
@@ -156,7 +157,9 @@ export function CalendarHeader({ currentDate, setCurrentDate, activeTowns = [], 
               </span>
             ))}
           </div>
-          
+
+          <SearchingSpinner active={isSyncing} />
+
           {isPickerOpen && (
             <MonthYearPicker 
               currentDate={currentDate}
