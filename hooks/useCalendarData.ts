@@ -17,6 +17,44 @@ const _slugifyCache = (text: string) =>
 const cacheKey = (city: string, date: dayjs.Dayjs) =>
   `${_slugifyCache(city)}:${date.format('YYYY-MM')}`;
 
+// Per-(citySlug:month) sync throttle. Without this, every month navigation re-fired
+// ~30 scraper requests (current + 4 neighbours x 6 platforms). Now a given month is
+// re-triggered at most once per SYNC_TTL.
+const lastSyncAt = new Map<string, number>();
+const SYNC_TTL_MS = 10 * 60 * 1000;   // don't re-trigger a month's scrape within 10 min
+const SCRAPE_WINDOW_MS = 90 * 1000;   // events may still be arriving this long after a trigger
+const syncKey = (citySlug: string, month: string) => `${citySlug}:${month}`;
+
+const PLATFORMS = ['dice', 'bandsintown', 'ntdlv', 'vegas-underground', 'eventbrite'];
+
+// Fire the scrape triggers for one city/month, unless it was synced recently.
+// Returns true if it actually fired. TM runs first so Bandsintown dedup can see it.
+async function triggerSync(citySlug: string, month: string): Promise<boolean> {
+  const k = syncKey(citySlug, month);
+  if (Date.now() - (lastSyncAt.get(k) ?? 0) < SYNC_TTL_MS) return false;
+  lastSyncAt.set(k, Date.now());
+  try {
+    await fetch('/api/ticketmaster/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ citySlug, month }),
+    }).catch(() => {});
+
+    await Promise.allSettled(
+      PLATFORMS.map((p) =>
+        fetch(`/api/${p}/sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ citySlug, month }),
+        })
+      )
+    );
+  } catch (e) {
+    console.error('Sync error:', e);
+  }
+  return true;
+}
+
 export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialLocals: string[] = [], initialTags: string[] = []) {
   const slugify = (text: string) => 
     text.toLowerCase().trim().replace(/[\s_]+/g, "-").replace(/[^\w-+]+/g, "").replace(/--+/g, "-").replace(/^-+|-+$/g, "");
@@ -27,8 +65,7 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
   // arriving). Drives the "searching" spinner. Only ever reflects the month in view.
   const [isSyncing, setIsSyncing] = useState(false);
   const [userId, setUserId] = useState<string>("");
-  const [weightedTags, setWeightedTags] = useState<{name: string, weight: number}[]>([]);
-  const [weightedLocals, setWeightedLocals] = useState<{name: string, weight: number}[]>([]); 
+  const [weightedLocals, setWeightedLocals] = useState<{name: string, weight: number}[]>([]);
   const [savedLocations, setSavedLocations] = useState<string[]>([]);
   const [allTimeTags, setAllTimeTags] = useState<{name: string, count: number}[]>([]);
   
@@ -82,66 +119,29 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
     fetchAllTimeTags();
   }, []);
 
-  const fetchPools = async () => {
-    const start = currentDate.startOf('month').format('YYYY-MM-DD');
-    const end = currentDate.endOf('month').format('YYYY-MM-DD');
-    const citySlug = city ? slugify(city) : null;
-    const targetCities = Array.from(new Set([...activeTowns, citySlug].filter((t): t is string => typeof t === 'string' && t.length > 0)));
-
-    if (targetCities.length === 0) {
-      setWeightedTags([]);
-      return;
+  // Tag "pool" weights for the month, derived from the events already loaded —
+  // no extra Supabase query (this used to re-query on every 5s poll). Falls back
+  // to the global all-time tags (already fetched once) so the list is never empty.
+  const weightedTags = useMemo(() => {
+    const tagCounts: Record<string, number> = {};
+    for (const flyer of events) {
+      flyer.flyer_tags?.forEach((ft: any) => {
+        const tagName = ft.tags?.name;
+        if (tagName && slugify(tagName) !== 'spam') {
+          const key = slugify(tagName);
+          tagCounts[key] = (tagCounts[key] || 0) + (ft.vote_count || 0);
+        }
+      });
     }
-
-    try {
-      const cityFilters = targetCities.map((t: string) => `city_slug.cs.{${t}}`).join(',');
-      const { data: monthFlyers } = await supabase
-        .from('flyers')
-        .select('flyer_tags(vote_count, tags(name)), city_slug')
-        .or(cityFilters)
-        .gte('event_start', start)
-        .lte('event_start', end + 'T23:59:59');
-
-      let tagCounts: Record<string, number> = {};
-
-      if (monthFlyers && monthFlyers.length > 0) {
-        monthFlyers.forEach((flyer: any) => {
-          flyer.flyer_tags?.forEach((ft: any) => {
-            const tagName = ft.tags?.name;
-            if (tagName && slugify(tagName) !== 'spam') {
-              const key = slugify(tagName);
-              tagCounts[key] = (tagCounts[key] || 0) + (ft.vote_count || 0);
-            }
-          });
-        });
-      }
-
-      if (Object.keys(tagCounts).length === 0) {
-        const { data: globalTags } = await supabase
-          .from('flyer_tags')
-          .select('vote_count, tags(name)')
-          .limit(200);
-
-        globalTags?.forEach((ft: any) => {
-          const tagName = ft.tags?.name;
-          if (tagName && slugify(tagName) !== 'spam') {
-            const key = slugify(tagName);
-            tagCounts[key] = (tagCounts[key] || 0) + (ft.vote_count || 0);
-          }
-        });
-      }
-
-      const weighted = Object.entries(tagCounts)
-        .map(([name, weight]) => ({ name, weight }))
-        .sort((a, b) => b.weight - a.weight);
-
-      setWeightedTags(weighted);
-    } catch (err) {
-      console.error("Pool fetch failed:", err);
+    let weighted = Object.entries(tagCounts)
+      .map(([name, weight]) => ({ name, weight }))
+      .sort((a, b) => b.weight - a.weight);
+    if (weighted.length === 0) {
+      weighted = allTimeTags.map(t => ({ name: t.name, weight: t.count }));
     }
-  };
-
-  useEffect(() => { fetchPools(); }, [currentDate, city, activeTowns, events]); 
+    return weighted;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [events, allTimeTags]);
 
   useEffect(() => {
     let current = [...activeTags];
@@ -181,15 +181,29 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
 
     const cityFilters = allSearchTowns.map((t: string) => `city_slug.cs.{${t}}`).join(',');
 
-    const { data, error } = await supabase
-      .from('flyers')
-      .select('*, flyer_tags(vote_count, tags(name))')
-      .gte('event_start', monthStart)
-      .lt('event_start', nextMonth)
-      .or(cityFilters);
+    // Supabase caps every response at 1000 rows. A busy city-month blows past that
+    // (Las Vegas/August is ~1800 across all sources), and the silently-dropped tail
+    // was hiding most DICE shows. Page through in 1000-row chunks until exhausted.
+    // Order by (event_start, id) so pagination is deterministic even with ties.
+    const PAGE = 1000;
+    const all: any[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from('flyers')
+        .select('id, title, event_start, event_end, location_name, price, ticket_url, image_url, description, source, city_slug, flyer_tags(vote_count, tags(name))')
+        .gte('event_start', monthStart)
+        .lt('event_start', nextMonth)
+        .or(cityFilters)
+        .order('event_start', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, from + PAGE - 1);
 
-    if (error) return null;
-    return data ?? [];
+      if (error) return all.length > 0 ? all : null;
+      if (!data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < PAGE) break;
+    }
+    return all;
   }, [currentDate, city, activeTowns]);
 
   // Full fetch — shows loading spinner, used on initial load.
@@ -210,94 +224,13 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
     }
   }, [queryEvents, city, currentDate]);
 
-  const syncPlatforms = async (targets: string[], date: dayjs.Dayjs) => {
-    const month = date.format('YYYY-MM');
-    if (targets.length === 0) return;
-
-    await Promise.all(
-      targets.map(async (citySlug) => {
-        try {
-          // TM runs first so BIT dedup can check against it
-          await fetch('/api/ticketmaster/sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ citySlug, month }),
-          }).catch(() => {});
-
-          await Promise.allSettled([
-            fetch('/api/dice/sync', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ citySlug, month }),
-            }),
-            fetch('/api/bandsintown/sync', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ citySlug, month }),
-            }),
-            fetch('/api/ntdlv/sync', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ citySlug, month }),
-            }),
-            fetch('/api/vegas-underground/sync', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ citySlug, month }),
-            }),
-            fetch('/api/eventbrite/sync', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ citySlug, month }),
-            }),
-          ]);
-        } catch (e) {
-          console.error('Sync error:', e);
-        }
-      })
-    );
-  };
-
-  const preSyncMonth = (towns: string[], date: dayjs.Dayjs) => {
+  // Fire scrapes for the given towns/month — throttled per city:month inside
+  // triggerSync. Resolves to true if any city actually triggered a fresh scrape.
+  const syncMonth = (towns: string[], date: dayjs.Dayjs): Promise<boolean> => {
     const month = date.format('YYYY-MM');
     const targets = towns.length > 0 ? towns : city ? [slugify(city)] : [];
-    targets.forEach(async (citySlug) => {
-      try {
-        await fetch('/api/ticketmaster/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ citySlug, month }),
-        }).catch(() => {});
-
-        await Promise.allSettled([
-          fetch('/api/dice/sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ citySlug, month }),
-          }),
-          fetch('/api/bandsintown/sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ citySlug, month }),
-          }),
-          fetch('/api/ntdlv/sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ citySlug, month }),
-          }),
-          fetch('/api/vegas-underground/sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ citySlug, month }),
-          }),
-          fetch('/api/eventbrite/sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ citySlug, month }),
-          }),
-        ]);
-      } catch {}
-    });
+    if (targets.length === 0) return Promise.resolve(false);
+    return Promise.all(targets.map((c) => triggerSync(c, month))).then((r) => r.some(Boolean));
   };
 
   useEffect(() => {
@@ -308,10 +241,18 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
       ? activeTowns
       : city ? [slugify(city)] : [];
     const key = cacheKey(city, currentDate);
+    const month = currentDate.format('YYYY-MM');
 
-    // Reflect "searching" for the month in view immediately — but only if there's
-    // actually something to scrape (a city/LoCAL selected).
-    setIsSyncing(targets.length > 0);
+    // Decide whether a scrape is (or is about to be) running for THIS month — that's
+    // what drives the spinner + result polling. willFire = a city is due for a fresh
+    // trigger; mayBeScraping = one was triggered recently enough that events could
+    // still be landing. A fully-settled month (synced a while ago) shows no spinner.
+    const lastFor = (c: string) => lastSyncAt.get(syncKey(c, month)) ?? 0;
+    const willFire = targets.some((c) => Date.now() - lastFor(c) >= SYNC_TTL_MS);
+    const mayBeScraping = targets.some((c) => Date.now() - lastFor(c) < SCRAPE_WINDOW_MS);
+    const shouldPoll = targets.length > 0 && (willFire || mayBeScraping);
+
+    setIsSyncing(shouldPoll);
 
     const stop = () => {
       if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
@@ -328,17 +269,17 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
         if (cancelled) return;
       }
 
-      // Nothing to scrape → no spinner, nothing to poll
       if (targets.length === 0) { setIsSyncing(false); return; }
 
-      // 2. Pre-sync adjacent months in the background (no spinner for these)
-      preSyncMonth(targets, currentDate.subtract(1, 'month'));
-      preSyncMonth(targets, currentDate.add(1, 'month'));
-      preSyncMonth(targets, currentDate.add(2, 'month'));
-      preSyncMonth(targets, currentDate.add(3, 'month'));
+      // 2. Pre-sync neighbours + current month (each throttled per city:month)
+      syncMonth(targets, currentDate.subtract(1, 'month'));
+      syncMonth(targets, currentDate.add(1, 'month'));
+      syncMonth(targets, currentDate.add(2, 'month'));
+      syncMonth(targets, currentDate.add(3, 'month'));
+      syncMonth(targets, currentDate);
 
-      // 3. Trigger the current-month scrape (fire-and-forget; we poll for results)
-      syncPlatforms(targets, currentDate);
+      // 3. Only poll / show the spinner if a scrape is actually in flight here
+      if (!shouldPoll) { setIsSyncing(false); return; }
 
       // 4. Poll for results while the scrape runs. Keep the spinner up until the
       //    event count settles (no change for a few polls AFTER events appear) or
@@ -407,6 +348,15 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
       return (tmByDay.get(day) || []).some(tmTitle => tmTitle.includes(perf));
     };
 
+    // Age tags ('all-ages' / '18+' / '21+') are an independent refinement, NOT a
+    // genre/source constraint. With no age selected the calendar shows every age;
+    // selecting one or more ages narrows to events carrying any of them. Applies in
+    // both OR and AND mode — so e.g. "dice" alone never hides 18+/21+ shows, while
+    // "dice" + "21+" excludes all-ages and 18+.
+    const AGE_TAGS = ['all-ages', '18+', '21+'];
+    const selectedAges = activeTags.filter((t: string) => AGE_TAGS.includes(t));
+    const genreTags = activeTags.filter((t: string) => !AGE_TAGS.includes(t));
+
     return events.filter((e: any) => {
       const eventSlugs = Array.isArray(e.city_slug) ? e.city_slug : [e.city_slug];
       const isInTargetLoCAL = currentViewTowns.some(town => eventSlugs.includes(town));
@@ -418,25 +368,29 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
       const isSpam = totalVotes > 0 && ((e.flyer_tags?.find((ft: any) => slugify(ft.tags.name) === 'spam')?.vote_count || 0) / totalVotes >= 0.25);
       if (isSpam && !showSpam) return false;
 
+      const eventTags = e.flyer_tags?.map((ft: any) => slugify(ft.tags.name)) || [];
+      if (e.source) eventTags.push(slugify(e.source));
+
+      // AGE GATE — no age selected => all ages pass; otherwise require a match.
+      if (selectedAges.length > 0 && !selectedAges.some((a: string) => eventTags.includes(a))) {
+        return false;
+      }
+
       if (showAllEvents) {
-        // In exclude mode, hide events that have any of the active tags
-        if (excludeMode && activeTags.length > 0) {
-          const eventTags = e.flyer_tags?.map((ft: any) => slugify(ft.tags.name)) || [];
-          if (e.source) eventTags.push(slugify(e.source));
-          return !activeTags.some((tag: string) => eventTags.includes(slugify(tag)));
+        // In exclude mode, hide events that have any of the active genre/source tags
+        if (excludeMode && genreTags.length > 0) {
+          return !genreTags.some((tag: string) => eventTags.includes(slugify(tag)));
         }
         return true;
       }
 
-      if (activeTags.length === 0) return false;
+      // Need at least one content selector: a genre/source tag, or an age.
+      if (genreTags.length === 0) return selectedAges.length > 0;
 
-      const eventTags = e.flyer_tags?.map((ft: any) => slugify(ft.tags.name)) || [];
-      if (e.source) eventTags.push(slugify(e.source));
+      const passesTags = filterMode === 'OR'
+        ? genreTags.some((tag: string) => eventTags.includes(slugify(tag)))
+        : genreTags.every((tag: string) => eventTags.includes(slugify(tag)));
 
-      const passesTags = filterMode === 'OR' 
-        ? activeTags.some((tag: string) => eventTags.includes(slugify(tag))) 
-        : activeTags.every((tag: string) => eventTags.includes(slugify(tag)));
-        
       return passesTags;
     }).sort((a, b) => (b.flyer_tags?.length || 0) - (a.flyer_tags?.length || 0));
   }, [events, activeTags, activeTowns, city, filterMode, showAllEvents, excludeMode, showSpam]);

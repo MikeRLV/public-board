@@ -327,6 +327,8 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
                         <img
                           src={e.image_url}
                           alt="Flyer"
+                          loading="lazy"
+                          decoding="async"
                           style={{ borderColor: 'var(--border-color)' }}
                           className="w-full h-auto shadow-[0_0_30px_rgba(0,0,0,0.5)] border"
                         />
