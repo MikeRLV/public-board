@@ -158,7 +158,11 @@ export function CalendarHeader({ currentDate, setCurrentDate, isSyncing = false,
             ))}
           </div>
 
-          <SearchingSpinner active={isSyncing} />
+          {/* Absolutely positioned so toggling the spinner never pushes the
+              month label + town tags up (was shifting layout on mobile). */}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 whitespace-nowrap pointer-events-none">
+            <SearchingSpinner active={isSyncing} />
+          </div>
 
           {isPickerOpen && (
             <MonthYearPicker 
