@@ -1,9 +1,6 @@
 "use client";
 import dayjs from "dayjs";
-import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
 import { useMemo } from "react";
-
-dayjs.extend(isSameOrBefore);
 
 // An event's day is just its stored date — NO timezone conversion. Scrapers capture
 // event_date natively in the venue's own local time, which is exactly the day people
@@ -25,28 +22,18 @@ export function CalendarGrid({ currentDate, todayStr, activeDay, setActiveDay, f
   const startOffset = currentDate.startOf("month").day();
   const daysInMonth = currentDate.daysInMonth();
 
-  // Group events by day — multi-day events populate every day in their range.
-  // The day is taken straight from event_date (native venue-local date); no tz math.
+  // Each event shows on its own day (event_date), full stop. We deliberately do NOT
+  // span across event_end: almost every "range" in the data is just a show that ends
+  // after midnight (e.g. ends 12:30 AM), which would otherwise duplicate onto the next
+  // day. True multi-day handling can come back later if a real need shows up.
   const eventsByDay = useMemo(() => {
     const map: Record<string, any[]> = {};
     filteredEvents.forEach((event) => {
-      const startStr = event.event_date || dayOf(event.event_start);
-      const endStr = event.event_end ? dayOf(event.event_end) : startStr;
-      if (!startStr) return;
-      // Walk from start date to end date (for multi-day events).
-      // Append T12:00:00 so dayjs treats these as local noon, not UTC midnight.
-      // dayjs('YYYY-MM-DD') parses as UTC midnight, and .format() then renders
-      // in local time — shifting dates like 2026-07-06T00:00:00Z to July 5 in EDT.
-      // Using noon avoids that entirely: noon local is the same calendar day in any timezone.
-      let current = dayjs(`${startStr}T12:00:00`);
-      const end = dayjs(`${endStr}T12:00:00`);
-      while (current.isSameOrBefore(end, 'day')) {
-        const d = current.format("YYYY-MM-DD");
-        if (!map[d]) map[d] = [];
-        if (!map[d].find((e: any) => e.id === event.id || e.title === event.title)) {
-          map[d].push(event);
-        }
-        current = current.add(1, 'day');
+      const d = event.event_date || dayOf(event.event_start);
+      if (!d) return;
+      if (!map[d]) map[d] = [];
+      if (!map[d].find((e: any) => e.id === event.id || e.title === event.title)) {
+        map[d].push(event);
       }
     });
     return map;
@@ -74,10 +61,6 @@ export function CalendarGrid({ currentDate, todayStr, activeDay, setActiveDay, f
           const isToday = dateStr === todayStr;
           const events = eventsByDay[dateStr] || [];
 
-          // Separate single-day and multi-day events for visual distinction
-          const multiDayEvents = events.filter((e: any) => !!e.event_end);
-          const singleDayEvents = events.filter((e: any) => !e.event_end);
-
           return (
             <div
               key={dateStr}
@@ -97,20 +80,17 @@ export function CalendarGrid({ currentDate, todayStr, activeDay, setActiveDay, f
 
               {/* DESKTOP VIEW */}
               <div className="hidden md:flex flex-col gap-1 mt-1 overflow-hidden">
-                {/* Multi-day events shown first with a distinct style */}
-                {multiDayEvents.slice(0, 3).map((e: any) => (
-                  <div 
-                    key={`multi-${e.id}`} 
-                    className="text-[9px] truncate border-l-2 pl-1 border-[var(--primary)] bg-[var(--primary)]/10 leading-tight uppercase font-bold text-[var(--primary)]/90 whitespace-nowrap"
-                  >
-                    {e.title || e.location_name}
-                  </div>
-                ))}
-                {/* Single-day events */}
-                {singleDayEvents.slice(0, Math.max(0, 5 - multiDayEvents.length)).map((e: any) => (
-                  <div 
-                    key={e.id} 
-                    className="text-[9px] truncate border-l-2 pl-1 border-[var(--primary)]/60 leading-tight uppercase font-bold text-[var(--text-main)]/90 whitespace-nowrap"
+                {/* Gold highlight is RESERVED for promoted events (e.promoted) — that
+                    flag isn't wired up yet, so today everything renders in the plain
+                    style. When promotion lands, promoted events light up gold. */}
+                {events.slice(0, 5).map((e: any) => (
+                  <div
+                    key={e.id}
+                    className={`text-[9px] truncate border-l-2 pl-1 leading-tight uppercase font-bold whitespace-nowrap ${
+                      e.promoted
+                        ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]/90'
+                        : 'border-[var(--primary)]/60 text-[var(--text-main)]/90'
+                    }`}
                   >
                     {e.title || e.location_name}
                   </div>
