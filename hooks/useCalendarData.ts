@@ -181,19 +181,24 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
 
     const cityFilters = allSearchTowns.map((t: string) => `city_slug.cs.{${t}}`).join(',');
 
-    // Supabase caps every response at 1000 rows. A busy city-month blows past that
-    // (Las Vegas/August is ~1800 across all sources), and the silently-dropped tail
-    // was hiding most DICE shows. Page through in 1000-row chunks until exhausted.
-    // Order by (event_start, id) so pagination is deterministic even with ties.
+    // Filter the month window by event_date — the venue-LOCAL calendar date — not the
+    // UTC event_start. A 10 PM Vegas show is stored as next-day UTC; filtering/grouping
+    // by event_start put it on the wrong day. event_date is set by the scrapers (and a
+    // DB trigger backfills it), so it's always present and timezone-correct.
+    //
+    // Supabase caps every response at 1000 rows; a busy city-month blows past that, so
+    // page through in 1000-row chunks. Order by (event_date, event_start, id): correct
+    // day buckets, chronological within a day, and a stable tiebreaker for pagination.
     const PAGE = 1000;
     const all: any[] = [];
     for (let from = 0; ; from += PAGE) {
       const { data, error } = await supabase
         .from('flyers')
-        .select('id, title, event_start, event_end, location_name, price, ticket_url, image_url, description, source, city_slug, flyer_tags(vote_count, tags(name))')
-        .gte('event_start', monthStart)
-        .lt('event_start', nextMonth)
+        .select('id, title, event_date, event_start, event_end, location_name, price, ticket_url, image_url, description, source, city_slug, flyer_tags(vote_count, tags(name))')
+        .gte('event_date', monthStart)
+        .lt('event_date', nextMonth)
         .or(cityFilters)
+        .order('event_date', { ascending: true })
         .order('event_start', { ascending: true })
         .order('id', { ascending: true })
         .range(from, from + PAGE - 1);

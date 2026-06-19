@@ -115,6 +115,8 @@ export async function POST(request: NextRequest) {
         location_name: e.location?.name || 'Unknown Venue',
         city_slug: [citySlug],
         event_start: e.startDate,
+        // startDate is the show's local time — slice its date as the native day (no tz math)
+        event_date: (e.startDate || '').substring(0, 10) || null,
         description: e.description || '',
         image_url: e.image || null,
         ticket_url: e.offers?.url || e.url || 'https://bandsintown.com',

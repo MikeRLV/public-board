@@ -5,15 +5,12 @@ import { useMemo } from "react";
 
 dayjs.extend(isSameOrBefore);
 
-// Extract the event's calendar date in America/New_York local time.
-// DICE (and most sources) store times with EDT/EST offsets; Supabase converts to UTC.
-// e.g. "2026-07-13T20:30:00-04:00" → stored as "2026-07-14T00:30:00+00:00" in UTC.
-// substring(0,10) would give July 14 (wrong). NYC local date gives July 13 (correct).
-// en-CA locale returns dates in YYYY-MM-DD format natively.
-const nycDateStr = (ts: string | null | undefined): string => {
-  if (!ts) return '';
-  return new Date(ts).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-};
+// An event's day is just its stored date — NO timezone conversion. Scrapers capture
+// event_date natively in the venue's own local time, which is exactly the day people
+// expect when they browse a town. Legacy rows that predate event_date fall back to the
+// date portion of the stored timestamp (a plain string slice — still no tz math).
+const dayOf = (ts: string | null | undefined): string =>
+  typeof ts === 'string' ? ts.slice(0, 10) : '';
 
 interface GridProps {
   currentDate: dayjs.Dayjs;
@@ -29,13 +26,12 @@ export function CalendarGrid({ currentDate, todayStr, activeDay, setActiveDay, f
   const daysInMonth = currentDate.daysInMonth();
 
   // Group events by day — multi-day events populate every day in their range.
-  // Use America/New_York local date so events like 8:30 PM EDT (midnight UTC)
-  // land on the correct calendar day, not the UTC-shifted next day.
+  // The day is taken straight from event_date (native venue-local date); no tz math.
   const eventsByDay = useMemo(() => {
     const map: Record<string, any[]> = {};
     filteredEvents.forEach((event) => {
-      const startStr = nycDateStr(event.event_start);
-      const endStr = event.event_end ? nycDateStr(event.event_end) : startStr;
+      const startStr = event.event_date || dayOf(event.event_start);
+      const endStr = event.event_end ? dayOf(event.event_end) : startStr;
       if (!startStr) return;
       // Walk from start date to end date (for multi-day events).
       // Append T12:00:00 so dayjs treats these as local noon, not UTC midnight.

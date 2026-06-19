@@ -75,9 +75,10 @@ export function CalendarLogic({ city, initialLocals = [], initialTags = [] }: { 
         location_name: formState.place, 
         price: formState.price, 
         description: formState.desc, 
-        image_url: urlData.publicUrl, 
+        image_url: urlData.publicUrl,
+        event_date: formState.date,
         event_start: dayjs(formState.date).hour(12).toISOString()
-      }, { onConflict: 'title' }).select(); 
+      }, { onConflict: 'title' }).select();
 
       if (!insertError && insertedData?.[0]) {
         for (const t of tags) {

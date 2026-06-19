@@ -7,14 +7,10 @@ import { createClient } from "@supabase/supabase-js";
 
 dayjs.extend(isSameOrAfter);
 
-// Extract the event's calendar date in America/New_York local time.
-// DICE stores times with EDT offset; Supabase converts to UTC.
-// e.g. "2026-07-13T20:30:00-04:00" → "2026-07-14T00:30:00+00:00" UTC.
-// Using NYC local date ensures 8:30 PM EDT shows on July 13, not July 14.
-const nycDateStr = (ts: string | null | undefined): string => {
-  if (!ts) return '';
-  return new Date(ts).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-};
+// An event's day is just its stored date — no timezone conversion. Matches CalendarGrid:
+// prefer the native event_date, fall back to the date portion of the stored timestamp.
+const dayOf = (ts: string | null | undefined): string =>
+  typeof ts === 'string' ? ts.slice(0, 10) : '';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -151,13 +147,13 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
 
   const scaled = (base: number) => ({ fontSize: `calc(${base}px * var(--text-scale, 1))` });
 
-  // Match CalendarGrid's NYC-date bucketing — use America/New_York local date.
+  // Match CalendarGrid's Pacific-date bucketing exactly.
   // Deduplicate by title per day: same show listed multiple times (different ticket
   // tiers, early/late sets) should only appear once.
   const seenTitles = new Set<string>();
   const dayEvents = events.filter((e: any) => {
-    const start = nycDateStr(e.event_start);
-    const end = e.event_end ? nycDateStr(e.event_end) : start;
+    const start = e.event_date || dayOf(e.event_start);
+    const end = e.event_end ? dayOf(e.event_end) : start;
     if (!start || !(activeDay >= start && activeDay <= end)) return false;
     if (seenTitles.has(e.title)) return false;
     seenTitles.add(e.title);
