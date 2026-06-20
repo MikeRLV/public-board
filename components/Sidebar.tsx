@@ -157,7 +157,7 @@ export function Sidebar(props: any) {
 
         <div className="flex-1 overflow-y-auto pr-1 -ml-6 pl-6 pt-4 overflow-x-hidden custom-scrollbar">
           {/* LoCALs Section */}
-          <div className="flex flex-col mb-8" style={{ gap: `calc(0.4rem * var(--text-scale))` }}>
+          <div className="flex flex-col mb-4" style={{ gap: `calc(0.4rem * var(--text-scale))` }}>
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center gap-2 cursor-pointer group w-fit overflow-visible" onClick={props.onBucketClick}>
                 <div className="flex items-center justify-center w-6 h-6 overflow-visible shrink-0">
@@ -221,8 +221,31 @@ export function Sidebar(props: any) {
             </div>
           </div>
 
-          <TrendingSection {...{ 
-            hasLocation, 
+          {/* Title search — sits between LoCALs and Trending. Narrows the calendar to
+              events whose title contains every typed word (case-insensitive). */}
+          <div className="mb-4 flex flex-col" style={{ gap: `calc(0.4rem * var(--text-scale))` }}>
+            <span style={{ ...scaled(11), color: 'var(--primary)' }} className="font-bold opacity-50 uppercase">Search</span>
+            <div className="relative">
+              <input
+                style={scaled(13)}
+                className="w-full bg-neutral-900 border border-neutral-700 p-2 pr-7 outline-none focus:border-[var(--primary)] font-bold text-[var(--text-main)]"
+                value={props.searchQuery || ""}
+                onChange={e => props.setSearchQuery?.(e.target.value)}
+              />
+              {props.searchQuery ? (
+                <button
+                  onClick={() => props.setSearchQuery?.("")}
+                  aria-label="Clear search"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-[var(--primary)] font-black leading-none"
+                >
+                  ×
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <TrendingSection {...{
+            hasLocation,
             trendingTags: props.trendingTags, 
             toggleTag, 
             scaled,
@@ -230,8 +253,6 @@ export function Sidebar(props: any) {
             onTrendingClick: props.onTrendingClick,
           }} />
           
-          <div className="h-10 shrink-0" />
-
           <FilterSection {...{
             TagPopRef,
             filterMode: props.filterMode,
@@ -257,7 +278,9 @@ export function Sidebar(props: any) {
           showSpam: props.showSpam,
           setShowSpam: props.setShowSpam,
           showAllAges: props.showAllAges,
-          setShowAllAges: props.setShowAllAges
+          setShowAllAges: props.setShowAllAges,
+          showPromoted: props.showPromoted,
+          setShowPromoted: props.setShowPromoted
         }} />
 
         <Tooltip triggerRef={helpTriggerRef} isOpen={showHelp}>

@@ -78,6 +78,11 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
   const [showAllAges, setShowAllAges] = useState(false);
   const [show18, setShow18] = useState(false);
   const [show21, setShow21] = useState(false);
+  // Featured events: surfaced first + shown regardless of tag filter while on (default).
+  const [showPromoted, setShowPromoted] = useState(true);
+  // Title search: when non-empty, the calendar shows only events whose title contains
+  // every typed word (case-insensitive), regardless of the tag/age filter.
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Reset excludeMode when showAllEvents is turned off
   useEffect(() => {
@@ -362,6 +367,9 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
     const selectedAges = activeTags.filter((t: string) => AGE_TAGS.includes(t));
     const genreTags = activeTags.filter((t: string) => !AGE_TAGS.includes(t));
 
+    // Title search words — every one must appear (case-insensitive) in the event title.
+    const searchWords = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+
     return events.filter((e: any) => {
       const eventSlugs = Array.isArray(e.city_slug) ? e.city_slug : [e.city_slug];
       const isInTargetLoCAL = currentViewTowns.some(town => eventSlugs.includes(town));
@@ -375,6 +383,20 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
 
       const eventTags = e.flyer_tags?.map((ft: any) => slugify(ft.tags.name)) || [];
       if (e.source) eventTags.push(slugify(e.source));
+
+      // SEARCH — when active, the title must contain every typed word. This overrides
+      // the tag/age filters (and the promoted bypass), so you can find an event by name
+      // no matter what's selected. Still gated to the town + non-spam checks above.
+      if (searchWords.length > 0) {
+        const title = (e.title || '').toLowerCase();
+        return searchWords.every((w: string) => title.includes(w));
+      }
+
+      // PROMOTED — while the toggle is on, a featured event surfaces regardless of the
+      // tag/age filters (it's already gated to the town + non-spam above). Turn the
+      // toggle off and it falls through to normal filtering, so it still shows if its
+      // tags match.
+      if (e.promoted && showPromoted) return true;
 
       // AGE GATE — no age selected => all ages pass; otherwise require a match.
       if (selectedAges.length > 0 && !selectedAges.some((a: string) => eventTags.includes(a))) {
@@ -397,8 +419,12 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
         : genreTags.every((tag: string) => eventTags.includes(slugify(tag)));
 
       return passesTags;
-    }).sort((a, b) => (b.flyer_tags?.length || 0) - (a.flyer_tags?.length || 0));
-  }, [events, activeTags, activeTowns, city, filterMode, showAllEvents, excludeMode, showSpam]);
+    }).sort((a, b) => {
+      // Promoted events sort first (within their day) while the toggle is on.
+      if (showPromoted && !!a.promoted !== !!b.promoted) return a.promoted ? -1 : 1;
+      return (b.flyer_tags?.length || 0) - (a.flyer_tags?.length || 0);
+    });
+  }, [events, activeTags, activeTowns, city, filterMode, showAllEvents, excludeMode, showSpam, showPromoted, searchQuery]);
 
   return {
     userId,
@@ -413,7 +439,9 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
     activeTowns, setActiveTowns, filterMode, setFilterMode,
     showAllEvents, setShowAllEvents,
     excludeMode, setExcludeMode,
-    showSpam, setShowSpam, showAllAges, setShowAllAges, show18, setShow18, show21, setShow21, 
+    showSpam, setShowSpam, showAllAges, setShowAllAges, show18, setShow18, show21, setShow21,
+    showPromoted, setShowPromoted,
+    searchQuery, setSearchQuery,
     slugify, fetchEvents
   };
 }

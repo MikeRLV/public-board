@@ -11,7 +11,9 @@ export function ToggleSection({
   showSpam, 
   setShowSpam,
   showAllAges,
-  setShowAllAges 
+  setShowAllAges,
+  showPromoted,
+  setShowPromoted
 }: any) {
   return (
     <div className="flex flex-col border-t border-white/10 mt-auto shrink-0 bg-[var(--bg-main)]">
@@ -40,7 +42,17 @@ export function ToggleSection({
        {/* VISIBILITY & +/- CONTROLS */}
        <div className="flex items-end justify-between border-t border-white/10 pt-4 pb-5 px-5 gap-2">
          <div className="flex flex-col gap-3">
-           
+
+           {/* Promoted/featured events surface first + show regardless of tag filter
+               while on. Default on; turning off just drops the special surfacing. */}
+           <button className="flex items-center gap-3 group text-left" onClick={() => setShowPromoted?.(!showPromoted)}>
+              <div
+                style={{ width: `calc(1rem * var(--text-scale))`, height: `calc(1rem * var(--text-scale))` }}
+                className={`border transition-all shrink-0 ${showPromoted ? 'bg-[var(--primary)] border-[var(--primary)] shadow-lg' : 'border-neutral-700'}`}
+              />
+              <span style={{ ...scaled(11), color: showPromoted ? 'var(--primary)' : 'var(--text-muted)' }} className="font-bold uppercase">Promoted</span>
+           </button>
+
            <button className="flex items-center gap-3 group text-left" onClick={() => setShowAllEvents?.(!showAllEvents)}>
               {/* Box turns emerald green */}
               <div 

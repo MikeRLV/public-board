@@ -38,6 +38,8 @@ export function CalendarLogic({ city, initialLocals = [], initialTags = [] }: { 
     activeTowns, setActiveTowns, filterMode, setFilterMode, showAllEvents, setShowAllEvents,
     excludeMode, setExcludeMode,
     showSpam, setShowSpam, showAllAges, setShowAllAges, show18, setShow18, show21, setShow21,
+    showPromoted, setShowPromoted,
+    searchQuery, setSearchQuery,
     slugify, fetchEvents
   } = useCalendarData(city, currentDate, initialLocals, initialTags);
 
@@ -126,9 +128,13 @@ export function CalendarLogic({ city, initialLocals = [], initialTags = [] }: { 
         setShowAllAges={setShowAllAges} 
         show18={show18} 
         setShow18={setShow18} 
-        show21={show21} 
-        setShow21={setShow21} 
-        onAddEvent={() => setIsPostModalOpen(true)} 
+        show21={show21}
+        setShow21={setShow21}
+        showPromoted={showPromoted}
+        setShowPromoted={setShowPromoted}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        onAddEvent={() => setIsPostModalOpen(true)}
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
         filteredEvents={filteredEvents} 
