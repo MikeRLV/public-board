@@ -194,7 +194,7 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
     for (let from = 0; ; from += PAGE) {
       const { data, error } = await supabase
         .from('flyers')
-        .select('id, title, event_date, event_start, event_end, location_name, price, ticket_url, image_url, description, source, city_slug, flyer_tags(vote_count, tags(name))')
+        .select('id, title, event_date, event_start, event_end, location_name, price, ticket_url, image_url, description, source, city_slug, promoted, flyer_tags(vote_count, tags(name))')
         .gte('event_date', monthStart)
         .lt('event_date', nextMonth)
         .or(cityFilters)
