@@ -25,7 +25,7 @@ const SYNC_TTL_MS = 10 * 60 * 1000;   // don't re-trigger a month's scrape withi
 const SCRAPE_WINDOW_MS = 90 * 1000;   // events may still be arriving this long after a trigger
 const syncKey = (citySlug: string, month: string) => `${citySlug}:${month}`;
 
-const PLATFORMS = ['dice', 'bandsintown', 'ntdlv', 'vegas-underground', 'eventbrite'];
+const PLATFORMS = ['dice', 'bandsintown', 'ntdlv', 'vegas-underground', 'eventbrite', 'punchup'];
 
 // Fire the scrape triggers for one city/month, unless it was synced recently.
 // Returns true if it actually fired. TM runs first so Bandsintown dedup can see it.
