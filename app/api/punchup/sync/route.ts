@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// PunchUp (comedy) only covers Las Vegas for now.
-const LV_SLUGS = ['las-vegas', 'las-vegas-nv'];
-
 // Fetch with one retry on 502 (cloudflared burst saturation).
 async function fetchWithRetry(url: string, options: RequestInit): Promise<Response> {
   const res = await fetch(url, options);
@@ -18,16 +15,11 @@ export async function POST(request: NextRequest) {
   try {
     const { citySlug, month } = await request.json();
 
-    // PunchUp only covers Las Vegas — skip other cities immediately
-    if (!LV_SLUGS.includes(citySlug)) {
-      return NextResponse.json({ status: 'not_applicable', citySlug });
+    if (!citySlug || !month) {
+      return NextResponse.json({ error: 'citySlug and month required' }, { status: 400 });
     }
 
-    if (!month) {
-      return NextResponse.json({ error: 'month required' }, { status: 400 });
-    }
-
-    console.log(`[PUNCHUP] Triggering scrape: ${month}`);
+    console.log(`[PUNCHUP] Triggering scrape: ${citySlug} ${month}`);
 
     // The Python scraper does the full PunchUp scrape + Supabase upsert as a
     // background asyncio task, returning {"status":"started"} immediately so the
@@ -36,7 +28,7 @@ export async function POST(request: NextRequest) {
     const scrapeRes = await fetchWithRetry(`${scraperBase}/scrape-punchup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ city: 'las vegas', month }),
+      body: JSON.stringify({ city: citySlug.replace(/-/g, ' '), month }),
     });
 
     if (!scrapeRes.ok) {
