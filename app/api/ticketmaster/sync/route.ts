@@ -137,6 +137,10 @@ function mapTMEventToFlyer(event: any, citySlug: string) {
     title: event.name,
     location_name: venue?.name || 'TBD',
     city_slug: [citySlug],
+    // localDate is the venue-local calendar day — store it as the native event_date
+    // (no tz math), matching every other source. Without this the calendar, which
+    // filters/groups by event_date, never renders Ticketmaster events.
+    event_date: startDate || null,
     event_start: `${startDate}T${startTime}`,
     event_end: endDate !== startDate ? `${endDate}T23:59:59` : null,
     price,
