@@ -91,7 +91,7 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
 
   useEffect(() => {
     const fetchLocals = async () => {
-      const { data } = await supabase.from('weighted_locals').select('name, weight').order('weight', { ascending: false });
+      const { data } = await supabase.from('available_locals').select('name, weight').order('weight', { ascending: false });
       if (data) {
         setWeightedLocals(data);
         setSavedLocations(data.map((item: any) => item.name));

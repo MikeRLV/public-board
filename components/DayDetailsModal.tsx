@@ -188,14 +188,14 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
 
   const fetchLocalSuggestions = async (search: string): Promise<{ name: string }[]> => {
     const { data, error } = await supabase
-      .from('weighted_locals').select('name').ilike('name', `%${search}%`).limit(8);
+      .from('available_locals').select('name').ilike('name', `%${search}%`).limit(8);
     if (error || !data) return [];
     return data.map((t: any) => ({ name: t.name }));
   };
 
   const fetchDefaultLocals = async (): Promise<{ name: string }[]> => {
     const { data, error } = await supabase
-      .from('weighted_locals').select('name').order('weight', { ascending: false }).limit(10);
+      .from('available_locals').select('name').order('weight', { ascending: false }).limit(10);
     if (error || !data) return [];
     return data.map((t: any) => ({ name: t.name }));
   };

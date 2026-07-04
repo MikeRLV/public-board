@@ -88,7 +88,7 @@ export function Sidebar(props: any) {
     if (!townInput?.trim()) return;
     const timer = setTimeout(async () => {
       const { data, error } = await supabase
-        .from('weighted_locals').select('name').ilike('name', `%${townInput.trim()}%`).limit(8);
+        .from('available_locals').select('name').ilike('name', `%${townInput.trim()}%`).limit(8);
       if (!error && data) setLocalSuggestions(data.map((t: any) => t.name));
     }, 150);
     return () => clearTimeout(timer);
@@ -98,7 +98,7 @@ export function Sidebar(props: any) {
     setLocalFocused(true);
     if (!townInput?.trim()) {
       const { data, error } = await supabase
-        .from('weighted_locals').select('name').order('weight', { ascending: false }).limit(10);
+        .from('available_locals').select('name').order('weight', { ascending: false }).limit(10);
       if (!error && data) setLocalSuggestions(data.map((t: any) => t.name));
     }
   };
