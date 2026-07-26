@@ -152,9 +152,12 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
   // tiers, early/late sets) should only appear once.
   const seenTitles = new Set<string>();
   const dayEvents = events.filter((e: any) => {
-    const start = e.event_date || dayOf(e.event_start);
-    const end = e.event_end ? dayOf(e.event_end) : start;
-    if (!start || !(activeDay >= start && activeDay <= end)) return false;
+    // One event, one day — its native event_date (fallback: the start timestamp's
+    // date). CalendarGrid buckets the same way, so the modal shows exactly what the
+    // grid does. (Previously this spanned event_date…event_end, so an event whose
+    // event_end landed on the next day leaked into that day's modal.)
+    const day = e.event_date || dayOf(e.event_start);
+    if (!day || day !== activeDay) return false;
     if (seenTitles.has(e.title)) return false;
     seenTitles.add(e.title);
     return true;

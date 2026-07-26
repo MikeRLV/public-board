@@ -195,11 +195,12 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
     // page through in 1000-row chunks. Order by (event_date, event_start, id): correct
     // day buckets, chronological within a day, and a stable tiebreaker for pagination.
     const PAGE = 1000;
-    const all: any[] = [];
-    for (let from = 0; ; from += PAGE) {
-      const { data, error } = await supabase
+    const SELECT = 'id, title, event_date, event_start, event_end, location_name, price, ticket_url, image_url, description, source, city_slug, promoted, flyer_tags(vote_count, tags(name))';
+
+    const pageQuery = (from: number, withCount = false) =>
+      supabase
         .from('flyers')
-        .select('id, title, event_date, event_start, event_end, location_name, price, ticket_url, image_url, description, source, city_slug, promoted, flyer_tags(vote_count, tags(name))')
+        .select(SELECT, withCount ? { count: 'exact' } : undefined)
         .gte('event_date', monthStart)
         .lt('event_date', nextMonth)
         .or(cityFilters)
@@ -208,10 +209,25 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
         .order('id', { ascending: true })
         .range(from, from + PAGE - 1);
 
-      if (error) return all.length > 0 ? all : null;
-      if (!data || data.length === 0) break;
-      all.push(...data);
-      if (data.length < PAGE) break;
+    // Fetch the first page WITH an exact count in the same request. Small city-months
+    // (the common case) finish in this one round-trip; only when there are more than
+    // PAGE rows do we fan out the remaining pages in PARALLEL — so a busy city-month
+    // stops paying for 3 sequential 1000-row round-trips and loads in one parallel wave.
+    const first = await pageQuery(0, true);
+    if (first.error) return null;
+
+    const all: any[] = [...(first.data ?? [])];
+    const count = first.count ?? all.length;
+
+    if (count > PAGE) {
+      const morePages = Math.ceil(count / PAGE) - 1;
+      const rest = await Promise.all(
+        Array.from({ length: morePages }, (_, i) => pageQuery((i + 1) * PAGE))
+      );
+      for (const { data, error } of rest) {
+        if (error) return all.length > 0 ? all : null;
+        if (data) all.push(...data);
+      }
     }
     return all;
   }, [currentDate, city, activeTowns]);
