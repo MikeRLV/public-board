@@ -16,8 +16,11 @@ jobs:
     steps:
       - name: Ping Supabase REST (one-row read)
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          # These are the PUBLIC (publishable) Supabase URL + anon key — the same
+          # values already shipped in the frontend bundle and gated by RLS, so
+          # inlining them here exposes nothing new and avoids needing repo secrets.
+          SUPABASE_URL: "https://omotngyhvqfqdqfwvhzg.supabase.co"
+          SUPABASE_ANON_KEY: "sb_publishable_zR8szEgDg7P4ZKPGU1Z1Dw_KgtsVcPU"
         run: |
           code=$(curl -s -o /dev/null -w "%{http_code}" \
             -H "apikey: ${SUPABASE_ANON_KEY}" \
