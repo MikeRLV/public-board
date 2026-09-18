@@ -84,9 +84,11 @@ export function useCalendarData(city: string, currentDate: dayjs.Dayjs, initialL
   // every typed word (case-insensitive), regardless of the tag/age filter.
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Reset excludeMode when showAllEvents is turned off
+  // EXCLUDE follows Show All when it's toggled: on by default when Show All is
+  // enabled, off when it's turned off. Only fires on a Show All change, so the
+  // user can still flip EXCLUDE off manually afterward without it snapping back.
   useEffect(() => {
-    if (!showAllEvents) setExcludeMode(false);
+    setExcludeMode(showAllEvents);
   }, [showAllEvents]);
 
   useEffect(() => {
