@@ -1,8 +1,14 @@
 "use client";
 
-export function TrendingSection({ hasLocation, trendingTags, toggleTag, scaled, hasEvents, onTrendingClick }: any) {
+export function TrendingSection({ hasLocation, trendingTags, toggleTag, scaled, hasEvents, onTrendingClick, activeTags = [] }: any) {
   const isMonthEmpty = hasEvents === false || (Array.isArray(hasEvents) && hasEvents.length === 0);
-  const tags = isMonthEmpty ? [] : (trendingTags || []);
+  // A tag already in the filters (include OR exclude) drops out of the suggestions,
+  // and comes back automatically when removed — same normalization as toggleTag.
+  const norm = (t: string) => String(t).toLowerCase().replace('#', '');
+  const active = new Set((activeTags || []).map(norm));
+  const tags = isMonthEmpty
+    ? []
+    : (trendingTags || []).filter((t: any) => !active.has(norm(t.name)));
   
   return (
     <div 

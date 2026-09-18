@@ -246,11 +246,12 @@ export function Sidebar(props: any) {
 
           <TrendingSection {...{
             hasLocation,
-            trendingTags: props.trendingTags, 
-            toggleTag, 
+            trendingTags: props.trendingTags,
+            toggleTag,
             scaled,
             hasEvents: props.hasEventsThisMonth,
             onTrendingClick: props.onTrendingClick,
+            activeTags,
           }} />
           
           <FilterSection {...{
