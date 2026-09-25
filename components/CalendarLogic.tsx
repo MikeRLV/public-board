@@ -4,6 +4,7 @@ import dayjs from "dayjs";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import { useCalendarData } from "../hooks/useCalendarData"; 
+import { useBackToClose } from "../hooks/useBackToClose";
 import { Sidebar } from "./Sidebar"; 
 import { CalendarHeader } from "./CalendarHeader";
 import { CalendarGrid } from "./CalendarGrid";
@@ -31,6 +32,11 @@ export function CalendarLogic({ city, initialLocals = [], initialTags = [] }: { 
     setBrowseType(type);
     setIsBrowseOpen(true);
   };
+
+  // Phone Back button closes the sidebar / open modal instead of leaving the site
+  useBackToClose(isSidebarOpen, () => setIsSidebarOpen(false));
+  useBackToClose(!!activeDay, () => setActiveDay(null));
+  useBackToClose(isBrowseOpen, () => setIsBrowseOpen(false));
 
   const {
     userId, events, isSyncing, filteredEvents, weightedTags, weightedLocals, allTimeTags,
