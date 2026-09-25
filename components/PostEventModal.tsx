@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import dayjs from "dayjs";
 import localeData from "dayjs/plugin/localeData";
 import { useSidebarLogic } from "../hooks/useSidebarLogic";
+import { useBackToClose } from "../hooks/useBackToClose";
 
 export function PostEventModal({ 
   isOpen, onClose, formState, setFormState, onSave, isUploading, todayStr, 
@@ -133,6 +134,8 @@ export function PostEventModal({
     setShowErrors(false);
     onClose();
   };
+
+  useBackToClose(isOpen, handleClose);
 
   if (!isOpen) return null;
 
