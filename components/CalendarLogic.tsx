@@ -66,39 +66,79 @@ export function CalendarLogic({ city, initialLocals = [], initialTags = [] }: { 
 
     if (localsArray.length === 0) return alert("Prohibited or empty LoCAL name.");
 
+    // Duplicate = same title (ignoring case/spacing) on the same date. A duplicate post
+    // adds its LoCALs and tags to the existing event instead of replacing it.
+    const normTitle = (t: string) => t.trim().replace(/\s+/g, ' ').toLowerCase();
+    const title = formState.title.trim().replace(/\s+/g, ' ');
+    const findExisting = async () => {
+      const { data } = await supabase.from('flyers')
+        .select('id, title, city_slug')
+        .eq('event_date', formState.date);
+      return data?.find(e => normTitle(e.title ?? '') === normTitle(title)) as { id: string; city_slug: string[] | string | null } | undefined;
+    };
+    const mergeInto = async (existing: { id: string; city_slug: string[] | string | null }) => {
+      const current = Array.isArray(existing.city_slug) ? existing.city_slug : (existing.city_slug ? [existing.city_slug] : []);
+      const merged = Array.from(new Set([...current, ...localsArray]));
+      if (merged.length !== current.length) {
+        const { error } = await supabase.from('flyers').update({ city_slug: merged }).eq('id', existing.id);
+        if (error) throw error;
+      }
+      return existing.id;
+    };
+
     setIsUploading(true);
     try {
-      const fileExt = formState.image.name.split('.').pop();
-      const fileName = `${localsArray[0]}/${Math.random().toString(36).slice(2)}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage.from('flyers').upload(fileName, formState.image);
-      if (uploadError) throw uploadError;
-      
-      const { data: urlData } = supabase.storage.from('flyers').getPublicUrl(fileName);
-      const tags = formState.tags.split(',').map(t => slugify(t)).filter(t => t !== "");
+      let flyerId: string;
+      let wasDuplicate = false;
+      const existing = await findExisting();
 
-      const { data: insertedData, error: insertError } = await supabase.from('flyers').upsert({
-        city_slug: localsArray,    
-        town_name: localsArray[0],  
-        title: formState.title, 
-        location_name: formState.place, 
-        price: formState.price, 
-        description: formState.desc, 
-        image_url: urlData.publicUrl,
-        event_date: formState.date,
-        event_start: dayjs(formState.date).hour(12).toISOString()
-      }, { onConflict: 'title' }).select();
+      if (existing) {
+        flyerId = await mergeInto(existing);
+        wasDuplicate = true;
+      } else {
+        const fileExt = formState.image.name.split('.').pop();
+        const fileName = `${localsArray[0]}/${Math.random().toString(36).slice(2)}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage.from('flyers').upload(fileName, formState.image);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from('flyers').getPublicUrl(fileName);
 
-      if (!insertError && insertedData?.[0]) {
-        for (const t of tags) {
-          await supabase.rpc('vote_on_tag', { 
-            target_flyer_id: insertedData[0].id, 
-            target_tag_name: t, 
-            vote_val: 1, 
-            voter_id: userId 
-          });
+        const { data: insertedData, error: insertError } = await supabase.from('flyers').insert({
+          city_slug: localsArray,
+          town_name: localsArray[0],
+          title,
+          location_name: formState.place,
+          price: formState.price,
+          description: formState.desc,
+          image_url: urlData.publicUrl,
+          event_date: formState.date,
+          event_start: dayjs(formState.date).hour(12).toISOString()
+        }).select('id');
+
+        if (insertError) {
+          // 23505 = unique violation: someone posted it moments ago, or the DB still
+          // enforces unique titles across all dates (see sql/flyers_dedupe_title_date.sql).
+          if (insertError.code !== '23505') throw insertError;
+          await supabase.storage.from('flyers').remove([fileName]);
+          const raced = await findExisting();
+          if (!raced) throw new Error(`An event called "${title}" already exists on another date.`);
+          flyerId = await mergeInto(raced);
+          wasDuplicate = true;
+        } else {
+          flyerId = insertedData[0].id;
         }
       }
 
+      const tags = formState.tags.split(',').map(t => slugify(t)).filter(t => t !== "");
+      for (const t of tags) {
+        await supabase.rpc('vote_on_tag', {
+          target_flyer_id: flyerId,
+          target_tag_name: t,
+          vote_val: 1,
+          voter_id: userId
+        });
+      }
+
+      if (wasDuplicate) alert("This event was already posted, so your LoCALs and tags were added to it.");
       setFormState({ title: "", town: "", place: "", price: "", desc: "", date: "", tags: "", image: null, isAllAges: false, is18Plus: false, is21Plus: false });
       setIsPostModalOpen(false); 
       fetchEvents(); 

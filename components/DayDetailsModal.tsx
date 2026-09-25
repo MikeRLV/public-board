@@ -243,15 +243,7 @@ export function DayDetailsModal({ activeDay, events, onClose, onVote, onPostClic
     try {
       const currentSlugs = Array.isArray(e.city_slug) ? e.city_slug : (e.city_slug ? [e.city_slug] : []);
       const updatedSlugs = Array.from(new Set([...currentSlugs, targetLocal]));
-      const { error } = await supabase.from("flyers").upsert({
-        title: e.title,
-        description: e.description,
-        event_start: e.event_start,
-        price: e.price,
-        image_url: e.image_url,
-        location_name: e.location_name,
-        city_slug: updatedSlugs,
-      }, { onConflict: 'title' });
+      const { error } = await supabase.from("flyers").update({ city_slug: updatedSlugs }).eq("id", e.id);
       if (error) throw error;
       alert(`Event added to ${targetLocal.replace(/-/g, ' ')} LoCAL.`);
       setNewLocalInput(prev => ({ ...prev, [e.id]: "" }));
